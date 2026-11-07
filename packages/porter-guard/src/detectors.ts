@@ -4,15 +4,53 @@ import type { Signal, SignalId } from "./protocol.ts";
 const MAX_SCAN = 200_000;
 
 const RUN_MARKER = /\[porter-run [0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\]/gi;
-/** Only a fence opened at a line start AND closed counts; an unclosed fence exempts nothing. */
-const FENCE = /^[ \t]{0,3}(```|~~~)[^\n]*\n[\s\S]*?^[ \t]{0,3}\1[ \t]*$/gm;
-
 export function stripRunMarker(text: string): string {
   return text.replace(RUN_MARKER, "");
 }
 
+/**
+ * Removes closed fenced code blocks in one linear pass. A fence opens at a line start (<=3 spaces
+ * indent, run of 3+ backticks or tildes) and closes at a later line with the same char, a run at
+ * least as long, and nothing after it. An opener with no closer exempts nothing: scanning resumes
+ * on the next line. Closer lookup uses per-char suffix maxima so the pass never goes quadratic.
+ */
 function stripFences(text: string): string {
-  return text.replace(FENCE, "");
+  const lines = text.split("\n");
+  const OPEN = /^ {0,3}(`{3,}|~{3,})/;
+  const CLOSE = /^ {0,3}(`{3,}|~{3,})[ \t]*\r?$/;
+  const closers: Record<string, { line: number; run: number }[]> = { "`": [], "~": [] };
+  for (let i = 0; i < lines.length; i++) {
+    const m = CLOSE.exec(lines[i]);
+    if (m) closers[m[1][0]].push({ line: i, run: m[1].length });
+  }
+  const sufMax: Record<string, number[]> = { "`": [], "~": [] };
+  for (const c of ["`", "~"]) {
+    const list = closers[c];
+    const s = new Array<number>(list.length + 1).fill(0);
+    for (let k = list.length - 1; k >= 0; k--) s[k] = Math.max(s[k + 1], list[k].run);
+    sufMax[c] = s;
+  }
+  const ptr: Record<string, number> = { "`": 0, "~": 0 };
+  const out: string[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    const m = OPEN.exec(lines[i]);
+    if (m) {
+      const c = m[1][0];
+      const n = m[1].length;
+      const list = closers[c];
+      while (ptr[c] < list.length && list[ptr[c]].line <= i) ptr[c]++;
+      if (sufMax[c][ptr[c]] >= n) {
+        let k = ptr[c];
+        while (list[k].run < n) k++;
+        i = list[k].line + 1;
+        continue;
+      }
+    }
+    out.push(lines[i]);
+    i++;
+  }
+  return out.join("\n");
 }
 
 /** Locator only. Raw input text never goes into a signal, so logs and responses cannot echo it. */
