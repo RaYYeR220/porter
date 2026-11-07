@@ -61,14 +61,55 @@ function locate(index: number | undefined, len: number): string {
 const IGNORE_PREVIOUS =
   /\b(?:ignore|disregard|forget|override|bypass)\s+(?:all\s+|any\s+|the\s+|your\s+|every\s+)?(?:previous|prior|above|earlier|preceding|system)\s+(?:instructions?|prompts?|rules?|context|messages?|guidelines?)|\byou\s+are\s+now\s+(?:a|an|in)\b|\bnew\s+instructions?\s*:/i;
 
-/** An HTML comment only counts when its body reads like it is talking to an agent. */
-const COMMENT_BAIT =
-  /\b(?:ignore|disregard|forget|override|instructions?|system prompt|assistant|agent|ai|llm|model|bot|porter|you\s+(?:must|should|will|are)|do not tell|don'?t tell|secret|token|api[_ -]?key|exfiltrat\w*|send\s+\w+\s+to)\b/i;
-
 const ROLE_BLOCK = /^[ \t]{0,3}#{1,6}[ \t]*(?:system|assistant|developer)[ \t]*:|<\|(?:im_start|im_end|system|assistant|endoftext)\|>|\[\/?INST\]|<<\/?SYS>>|^[ \t]*<\/?(?:system|assistant)>[ \t]*$/im;
 
 const TOOL_BAIT =
   /\b(?:you\s+(?:must|should|need\s+to|will|have\s+to)|please|now)\b[^\n.]{0,50}\b(?:call|invoke|run|execute|use)\b[^\n.]{0,40}\b(?:tool|function|mcp|shell|bash|terminal|command|fetch|search)\b|\btool_calls?\b\s*[:=]/i;
+
+/**
+ * A hidden comment is STRONG only when it is addressed to an automated reader or tries to drive
+ * tools. Template comments aimed at the human reporter ("Describe the bug", "Redact any API keys",
+ * "e.g. ...", questions) match none of these and produce no signal.
+ */
+const ADDRESSED_TO_BOT = [
+  /^\s*(?:(?:ai|llm|triage|automated)[ -]?)?(?:assistant|agent|bot|llm|ai)\s*[:,]/i,
+  /^\s*(?:ai|llm|bot|agent)[ -]?instructions?\b/i,
+  /\b(?:note|message|instructions?|attention|reminder)s?\s+(?:to|for)\s+(?:the\s+|any\s+|all\s+)?(?:ai|llm|bot|assistant|agent|triage|language model|automated)/i,
+  /\bif\s+you\s+(?:are|'re)\s+(?:an?\s+|the\s+)?(?:ai|llm|bot|assistant|agent|language model|automated)/i,
+  /\bai[- ]?instructions?\s*:/i,
+  /\b(?:do\s+not|don'?t|never)\s+(?:mention|tell|reveal|disclose|show|say)\s+(?:this|that|these|it)\b/i,
+  /\b(?:when|while|before|after)\s+(?:you\s+are\s+)?(?:replying|responding|answering|commenting|triaging)\b/i,
+  /\b(?:reply|respond|answer)\s+(?:with|using)\b/i,
+  /\b(?:in|at the (?:end|start) of|into)\s+(?:your|the)\s+(?:reply|answer|response|comment|output)\b/i,
+  /\b(?:render|include|embed|append|prepend|print|output)\s+(?:this|the following|the token|the string|a link|an image)\b/i,
+  /\btell\s+(?:the\s+)?(?:user|reporter|author)\b/i,
+  /\b(?:you\s+(?:must|should|will|need\s+to|are\s+to)|please)\s+(?:now\s+)?(?:call|close|label|approve|merge|assign|post|run|execute|fetch|reply|respond|append|tell|output|ignore|disregard|send|open|delete)\b/i,
+  /\b(?:add|remove|close|post|read|write|create|delete|update|fetch|run|exec|execute|send|set|assign|merge|approve|search|list)_[a-z][a-z_]*\b/,
+  /\b[a-z]+_[a-z_]+\s*\(/,
+  /!\[[^\]\n]*\]\(\s*https?:/i,
+];
+
+function commentIsStrong(body: string): boolean {
+  return (
+    IGNORE_PREVIOUS.test(body) ||
+    ROLE_BLOCK.test(body) ||
+    TOOL_BAIT.test(body) ||
+    ADDRESSED_TO_BOT.some((re) => re.test(body))
+  );
+}
+
+/** Linear scan for closed HTML comments; an unclosed "<!--" ends the search. */
+function* htmlComments(text: string): Generator<{ index: number; length: number; body: string }> {
+  let pos = 0;
+  for (;;) {
+    const start = text.indexOf("<!--", pos);
+    if (start === -1) return;
+    const end = text.indexOf("-->", start + 4);
+    if (end === -1) return;
+    yield { index: start, length: end + 3 - start, body: text.slice(start + 4, Math.min(end, start + 4 + 4000)) };
+    pos = end + 3;
+  }
+}
 
 function find(re: RegExp, text: string): RegExpMatchArray | null {
   return text.match(re);
@@ -95,9 +136,9 @@ export function detectInjectionSignals(input: string): Signal[] {
   const out: Signal[] = [];
   const add = (id: SignalId, at: number | undefined, len: number) => out.push({ id, excerpt: locate(at, len) });
 
-  for (const m of unfenced.matchAll(/<!--([\s\S]{0,4000}?)-->/g)) {
-    if (IGNORE_PREVIOUS.test(m[1]) || COMMENT_BAIT.test(m[1]) || ROLE_BLOCK.test(m[1]) || TOOL_BAIT.test(m[1])) {
-      add("hidden_html_comment", m.index, m[0].length);
+  for (const c of htmlComments(unfenced)) {
+    if (commentIsStrong(c.body)) {
+      add("hidden_html_comment", c.index, c.length);
       break;
     }
   }
