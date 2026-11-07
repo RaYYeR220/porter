@@ -36,6 +36,7 @@ export type SignalId =
   | "secret_api_key"
   | "secret_private_key";
 
+/** excerpt is a locator ("offset=N len=M"), never raw input text. */
 export type Signal = { id: SignalId; excerpt: string };
 
 export type ModelVerdict = {

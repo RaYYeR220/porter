@@ -4,7 +4,8 @@ import type { Signal, SignalId } from "./protocol.ts";
 const MAX_SCAN = 200_000;
 
 const RUN_MARKER = /\[porter-run [0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\]/gi;
-const FENCE = /(```|~~~)[^\n]*\n[\s\S]*?(?:\n[ \t]*\1[ \t]*(?=\n|$)|$)/g;
+/** Only a fence opened at a line start AND closed counts; an unclosed fence exempts nothing. */
+const FENCE = /^[ \t]{0,3}(```|~~~)[^\n]*\n[\s\S]*?^[ \t]{0,3}\1[ \t]*$/gm;
 
 export function stripRunMarker(text: string): string {
   return text.replace(RUN_MARKER, "");
@@ -14,13 +15,9 @@ function stripFences(text: string): string {
   return text.replace(FENCE, "");
 }
 
-function excerpt(s: string, max = 80): string {
-  const flat = s.replace(/\s+/g, " ").trim();
-  return flat.length > max ? flat.slice(0, max) + "..." : flat;
-}
-
-function redact(s: string): string {
-  return s.slice(0, 6) + "...[redacted]";
+/** Locator only. Raw input text never goes into a signal, so logs and responses cannot echo it. */
+function locate(index: number | undefined, len: number): string {
+  return `offset=${index ?? 0} len=${len}`;
 }
 
 const IGNORE_PREVIOUS =
@@ -58,41 +55,41 @@ export function detectInjectionSignals(input: string): Signal[] {
   const full = stripRunMarker(input.slice(0, MAX_SCAN));
   const unfenced = stripFences(full);
   const out: Signal[] = [];
-  const add = (id: SignalId, ex: string) => out.push({ id, excerpt: excerpt(ex) });
+  const add = (id: SignalId, at: number | undefined, len: number) => out.push({ id, excerpt: locate(at, len) });
 
   for (const m of unfenced.matchAll(/<!--([\s\S]{0,4000}?)-->/g)) {
     if (IGNORE_PREVIOUS.test(m[1]) || COMMENT_BAIT.test(m[1]) || ROLE_BLOCK.test(m[1]) || TOOL_BAIT.test(m[1])) {
-      add("hidden_html_comment", m[0]);
+      add("hidden_html_comment", m.index, m[0].length);
       break;
     }
   }
 
   const zw = find(/[​‌‍⁠﻿]{3,}/, full);
-  if (zw) add("zero_width", `${zw[0].length} zero-width characters`);
+  if (zw) add("zero_width", zw.index, zw[0].length);
 
   const bidi = find(/[‪-‮⁦-⁩]/, full);
-  if (bidi) add("bidi_override", `U+${bidi[0].codePointAt(0)!.toString(16).toUpperCase()}`);
+  if (bidi) add("bidi_override", bidi.index, bidi[0].length);
 
   for (const m of full.matchAll(/[A-Za-z0-9+/]{200,}={0,2}/g)) {
     if (looksLikeAscii(m[0])) {
-      add("base64_blob", m[0].slice(0, 40));
+      add("base64_blob", m.index, m[0].length);
       break;
     }
   }
 
   const role = find(ROLE_BLOCK, unfenced);
-  if (role) add("role_block", role[0]);
+  if (role) add("role_block", role.index, role[0].length);
 
-  const ign = find(IGNORE_PREVIOUS, unfenced);
-  if (ign) add("ignore_previous", ign[0]);
+  const ign = find(IGNORE_PREVIOUS, full);
+  if (ign) add("ignore_previous", ign.index, ign[0].length);
 
-  const bait = find(TOOL_BAIT, unfenced);
-  if (bait) add("tool_bait", bait[0]);
+  const bait = find(TOOL_BAIT, full);
+  if (bait) add("tool_bait", bait.index, bait[0].length);
 
   for (const m of full.matchAll(/!?\[[^\]\n]{0,200}\]\((https?:\/\/[^)\s]{1,2000})\)/gi)) {
     const url = m[1];
     if (/\{\{|\$\{|%7B%7B|<[a-z_ ]*(?:secret|token|key|env)/i.test(url) || /[?&#][^=&]*=[^&]*(?:secret|token|api[_-]?key|password|env)/i.test(url)) {
-      add("exfil_link", m[0]);
+      add("exfil_link", m.index, m[0].length);
       break;
     }
   }
@@ -115,7 +112,7 @@ export function detectSecrets(input: string): Signal[] {
   const out: Signal[] = [];
   for (const { id, re } of SECRET_PATTERNS) {
     const m = text.match(re);
-    if (m) out.push({ id, excerpt: redact(m[0]) });
+    if (m) out.push({ id, excerpt: locate(m.index, m[0].length) });
   }
   return out;
 }
