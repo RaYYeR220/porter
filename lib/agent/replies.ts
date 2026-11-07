@@ -19,16 +19,29 @@ const HELD_REASONS: Record<string, string> = {
   secrets:
     "The text may contain a credential such as an access token or a private key. If it does, revoke it now and edit it out of the issue; Porter will not repeat it.",
   harm: "Porter does not handle this kind of content automatically.",
-  output: "Porter prepared an answer but held it back so a maintainer can check it before it is posted.",
 };
 
-export type FixedReplyCtx = { retryAfterSec?: number; profile?: string; scope?: string };
+/**
+ * `profile` picks the held wording ("output" = our own output check stopped the draft; nothing is
+ * queued for posting then). `step` is the call a budget refusal hit: only "triage" (or unknown)
+ * means Porter never looked at the issue.
+ */
+export type FixedReplyCtx = {
+  retryAfterSec?: number;
+  profile?: string;
+  scope?: string;
+  step?: "triage" | "repro" | "review";
+};
 
 export function fixedReply(kind: "held_guardrail" | "refused_budget", ctx: FixedReplyCtx = {}): string {
   if (kind === "held_guardrail") {
+    const first =
+      ctx.profile === "output"
+        ? `${INTRO} ${ASSISTANT} couldn't send an automatic reply this time, so it has passed the issue to a maintainer.`
+        : `${INTRO} ${ASSISTANT} has passed it to a maintainer instead of answering it automatically.`;
     const reason = ctx.profile ? HELD_REASONS[ctx.profile] : undefined;
     return [
-      `${INTRO} ${ASSISTANT} has passed it to a maintainer instead of answering it automatically.${reason ? ` ${reason}` : ""}`,
+      `${first}${reason ? ` ${reason}` : ""}`,
       "",
       "A maintainer will read it and follow up here. Nothing has been labelled or closed.",
     ].join("\n");
@@ -38,11 +51,15 @@ export function fixedReply(kind: "held_guardrail" | "refused_budget", ctx: Fixed
     typeof ctx.retryAfterSec === "number" && Number.isFinite(ctx.retryAfterSec)
       ? `The limit resets in about ${formatWait(ctx.retryAfterSec)}.`
       : "The limit resets with the next daily reset.";
+  const effect =
+    ctx.step === undefined || ctx.step === "triage"
+      ? "so it has not looked at this issue"
+      : "so it stopped before it could finish an answer to this issue";
   // Scope "user" is the reporter's own allowance; any other scope is Porter's pooled wallet.
   const who =
     ctx.scope === undefined || ctx.scope === "user"
-      ? "You have reached the limit of automated answers that Porter, this repository's assistant, gives one person, so it has not looked at this issue."
-      : `${ASSISTANT} has reached its own spending limit, so it has not looked at this issue.`;
+      ? `You have reached the limit of automated answers that Porter, this repository's assistant, gives one person, ${effect}.`
+      : `${ASSISTANT} has reached its own spending limit, ${effect}.`;
   return [`${INTRO} ${who} ${wait}`, "", "Maintainers can still read and answer it."].join("\n");
 }
 

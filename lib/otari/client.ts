@@ -97,6 +97,10 @@ export function createOtariClient(cfg: { apiKey: string; baseUrl?: string; fetch
       text = await res.text();
     } catch (e) {
       if (e instanceof Error && e.name === "AbortError") throw e;
+      // AbortSignal.timeout(): the request may still be running and billed upstream, so callers must not blindly retry.
+      if (e instanceof Error && e.name === "TimeoutError") {
+        throw new OtariError({ kind: "upstream", status: 0, code: "timeout", message: "Otari request timed out" });
+      }
       // Keep only the error class: the original message may echo request details.
       throw new OtariError({
         kind: "upstream",

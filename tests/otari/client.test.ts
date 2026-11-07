@@ -184,3 +184,37 @@ describe("mcp", () => {
     });
   });
 });
+
+describe("transport failures", () => {
+  /** Never answers; rejects with the signal's reason once it aborts, like fetch does. */
+  const hanging = (async (_url: string | URL | Request, init?: RequestInit) =>
+    new Promise<Response>((_, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+    })) as typeof fetch;
+
+  it("classifies a client-side timeout as code timeout, not a network error", async () => {
+    const client = createOtariClient({ apiKey: "k", baseUrl: BASE, fetchImpl: hanging });
+    const err = await client
+      .chat({ model: "m", messages: [] }, { signal: AbortSignal.timeout(20) })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(OtariError);
+    expect(err).toMatchObject({ kind: "upstream", code: "timeout", status: 0 });
+  });
+
+  it("still rethrows a caller's abort as is", async () => {
+    const client = createOtariClient({ apiKey: "k", baseUrl: BASE, fetchImpl: hanging });
+    const ac = new AbortController();
+    const p = client.chat({ model: "m", messages: [] }, { signal: ac.signal });
+    ac.abort();
+    const err = await p.catch((e: unknown) => e);
+    expect(err).not.toBeInstanceOf(OtariError);
+    expect((err as Error).name).toBe("AbortError");
+  });
+
+  it("keeps invalid_json for a 2xx with a non-JSON body", async () => {
+    const fetchImpl = (async () => new Response("<html>oops</html>", { status: 200 })) as typeof fetch;
+    const client = createOtariClient({ apiKey: "k", baseUrl: BASE, fetchImpl });
+    const err = await client.chat({ model: "m", messages: [] }).catch((e: unknown) => e);
+    expect(err).toMatchObject({ kind: "upstream", code: "invalid_json", status: 200 });
+  });
+});

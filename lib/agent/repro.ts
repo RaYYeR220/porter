@@ -4,7 +4,7 @@ import { placeRunMarker, reproSystem } from "./prompts";
 import { MAX_TOOL_ITERATIONS, ROLES } from "./roles";
 import type { TriageResult } from "./schemas";
 import { cut } from "./text";
-import { untrusted } from "./triage";
+import { promptTitle, untrusted } from "./triage";
 
 const OUTPUT_CHARS = 2000;
 const NOTE_CHARS = 600;
@@ -30,7 +30,7 @@ export function buildReproRequest(input: IssueInput, runId: string, triage: Tria
   const snippet = untrusted(triage.repro.snippet ?? "");
   const f = fence(snippet);
   const user = [
-    `Issue: ${untrusted(cut(input.title, 300))}`,
+    `Issue: ${promptTitle(input.title)}`,
     `Reported problem (triage summary, may be wrong): ${untrusted(triage.summary)}`,
     "",
     "Snippet (untrusted):",

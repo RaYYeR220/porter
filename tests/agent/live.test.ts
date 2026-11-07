@@ -1,19 +1,22 @@
 import { existsSync } from "node:fs";
-import { beforeAll, describe, expect, it } from "vitest";
-import { asc, eq } from "drizzle-orm";
-import { armClient, runIssue } from "../../lib/agent/pipeline";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { asc, eq, inArray } from "drizzle-orm";
+import { armClient, reviewKey, runIssue } from "../../lib/agent/pipeline";
 import type { IssueInput } from "../../lib/agent/pipeline";
 import { db } from "../../lib/db/client";
-import { issues, repos, runs } from "../../lib/db/schema";
+import { issues, kv, proposals, repos, runs } from "../../lib/db/schema";
 
 /**
  * Three fixture issues through the desk workspace (real Otari: mandate, budgets, MCP, sandbox).
  * Costs money: run only with OTARI_LIVE=1, a funded balance and the porter-repo MCP server registered.
+ * Costs are printed per case; every row the test creates is deleted afterwards, so no fixture
+ * (issue #9999 included) leaves an approvable proposal or a review item behind.
  */
 const live = process.env.OTARI_LIVE === "1";
 
 describe.skipIf(!live)("pipeline live (desk)", () => {
   let repo = "";
+  const runIds: string[] = [];
 
   beforeAll(() => {
     if (existsSync(".env.local")) process.loadEnvFile(".env.local");
@@ -21,10 +24,18 @@ describe.skipIf(!live)("pipeline live (desk)", () => {
     if (!repo) throw new Error("DEMO_REPO is required for the live pipeline test");
   });
 
-  async function run(caseId: string, title: string, body: string) {
-    const input: IssueInput = { source: "eval", arm: "porter", repo, number: null, title, body, authorExternalId: `eval:live-${caseId}` };
-    const { otari, mcpServerId } = armClient("porter");
-    const out = await runIssue(input, { otari, db: db(), mcpServerId });
+  afterAll(async () => {
+    if (runIds.length === 0) return;
+    const d = db();
+    await d.delete(proposals).where(inArray(proposals.runId, runIds));
+    await d.delete(kv).where(inArray(kv.key, runIds.map(reviewKey)));
+    await d.delete(runs).where(inArray(runs.id, runIds)); // cascades to steps
+  });
+
+  async function run(caseId: string, title: string, body: string, number: number | null = null) {
+    const input: IssueInput = { source: "eval", arm: "porter", repo, number, title, body, authorExternalId: `eval:live-${caseId}` };
+    const out = await runIssue(input, { ...armClient("porter"), db: db() });
+    runIds.push(out.runId);
     const [row] = await db().select({ cost: runs.totalCostUsd }).from(runs).where(eq(runs.id, out.runId));
     console.log(`[live] ${caseId}: status=${out.status} cost=$${row.cost.toFixed(5)} run=${out.runId}`);
     return out;
@@ -49,20 +60,12 @@ describe.skipIf(!live)("pipeline live (desk)", () => {
       .orderBy(asc(issues.number))
       .limit(1);
     expect(seed, "the demo repo snapshot needs at least one issue").toBeDefined();
-    const out = await runIssue(
-      {
-        source: "eval",
-        arm: "porter",
-        repo,
-        number: 9999,
-        title: `Again: ${seed.title}`,
-        body: `I think I am hitting the same thing as described before:\n\n${(seed.body ?? seed.title).slice(0, 800)}`,
-        authorExternalId: "eval:live-duplicate",
-      },
-      { ...armClient("porter"), db: db() },
+    const out = await run(
+      "duplicate",
+      `Again: ${seed.title}`,
+      `I think I am hitting the same thing as described before:\n\n${(seed.body ?? seed.title).slice(0, 800)}`,
+      9999,
     );
-    const [row] = await db().select({ cost: runs.totalCostUsd }).from(runs).where(eq(runs.id, out.runId));
-    console.log(`[live] duplicate: status=${out.status} cost=$${row.cost.toFixed(5)} run=${out.runId}`);
     expect(out.status).toBe("answered");
     expect(out.proposals).toContainEqual({
       action: "close_as_duplicate",

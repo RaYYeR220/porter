@@ -66,6 +66,18 @@ const MAX_STORED_BODY_CHARS = 65_536;
 const MIN_CALL_MS = 5_000;
 const MAX_LABELS = 5;
 
+/** owner/name as GitHub spells them; "." and ".." are no names. */
+const REPO_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+export function isValidRepo(repo: string): boolean {
+  return REPO_RE.test(repo) && repo.split("/").every((part) => part !== "." && part !== "..");
+}
+
+/**
+ * Upstream codes that mean the request may already have been served (and billed): a client-side
+ * timeout, or a 2xx whose body was not JSON. They are recorded under their own name, never retried.
+ */
+const SERVED_MAYBE = new Set(["timeout", "invalid_json"]);
+
 export class DuplicateDeliveryError extends Error {
   constructor(readonly deliveryId: string) {
     super(`a run already exists for delivery ${deliveryId}`);
@@ -102,7 +114,7 @@ export async function startRun(input: IssueInput, deps: { db?: Db; recorder?: Re
   return id;
 }
 
-type Failure = { kind: OtariErrorKind | "exception" | "deadline"; error: OtariError | null };
+type Failure = { kind: OtariErrorKind | "exception" | "deadline"; error: OtariError | null; role: Role };
 type CallResult<T> = { ok: true; data: ChatResponse; value: T } | { ok: false; failure: Failure };
 /** Reads a successful response once: the value for the pipeline, extra fields for its step row. */
 type Inspect<T> = (data: ChatResponse) => { value: T; step?: Partial<StepRecord> };
@@ -173,7 +185,7 @@ class Run {
       const left = this.deadlineAt - Date.now();
       if (left < MIN_CALL_MS) {
         await this.step(role, { requestedModel: body.model, errorKind: "deadline" });
-        return { ok: false, failure: { kind: "deadline", error: null } };
+        return { ok: false, failure: { kind: "deadline", error: null, role } };
       }
       const t0 = Date.now();
       let res: { data: ChatResponse; meta: OtariMeta } | undefined;
@@ -182,6 +194,8 @@ class Run {
         res = await this.otari.chat(body, {
           conversationId: `run-${this.id}`,
           tags: { app: "porter", role, arm: this.input.arm },
+          // Same key on the retry, so a request Otari already served is not billed twice.
+          idempotencyKey: `run-${this.id}-${role}`,
           signal: AbortSignal.timeout(Math.min(STEP_TIMEOUT_MS[role], left)),
         });
       } catch (e) {
@@ -194,18 +208,19 @@ class Run {
         return { ok: true, data: res.data, value: seen.value };
       }
       if (err instanceof OtariError) {
+        const maybeServed = err.kind === "upstream" && SERVED_MAYBE.has(err.code ?? "");
         await this.step(role, {
           requestedModel: body.model,
           durationMs: ms,
           guardrails: err.guardrails.length > 0 ? err.guardrails : null,
-          errorKind: err.kind,
+          errorKind: maybeServed ? err.code : err.kind,
           errorStatus: err.status,
         });
-        if (err.kind === "upstream" && attempt === 1) continue;
-        return { ok: false, failure: { kind: err.kind, error: err } };
+        if (err.kind === "upstream" && !maybeServed && attempt === 1) continue;
+        return { ok: false, failure: { kind: err.kind, error: err, role } };
       }
       await this.step(role, { requestedModel: body.model, durationMs: ms, errorKind: "exception" });
-      return { ok: false, failure: { kind: "exception", error: null } };
+      return { ok: false, failure: { kind: "exception", error: null, role } };
     }
   }
 
@@ -237,7 +252,11 @@ class Run {
       case "budget_exceeded":
         return {
           status: "refused_budget",
-          reply: fixedReply("refused_budget", { retryAfterSec: e?.retryAfterSec ?? undefined, scope: e?.budgetScope ?? undefined }),
+          reply: fixedReply("refused_budget", {
+            retryAfterSec: e?.retryAfterSec ?? undefined,
+            scope: e?.budgetScope ?? undefined,
+            step: f.role,
+          }),
         };
       case "insufficient_funds": {
         const at = this.now();
@@ -332,6 +351,12 @@ export async function runIssue(input: IssueInput, deps: PipelineDeps): Promise<R
   const now = deps.now ?? (() => new Date());
   const rec = recorderFor(deps);
   const runId = deps.runId ?? (await startRun(input, { recorder: rec }));
+  if (!isValidRepo(input.repo)) {
+    // Never let a malformed repo reach a prompt or a tool argument.
+    await rec.addStep(runId, { ...EMPTY_STEP, role: "warning", errorKind: "invalid_repo" });
+    await rec.finishRun(runId, { status: "failed", reply: null, triage: null, totalCostUsd: 0, finishedAt: now() });
+    return { runId, status: "failed", reply: null, proposals: [] };
+  }
   const mcpServerId = deps.mcpServerId !== undefined ? deps.mcpServerId : getMcpServerId(input.arm);
   const run = new Run(runId, input, deps.otari, rec, now);
 

@@ -7,6 +7,7 @@ import { ROLES } from "./roles";
 import { jsonSchemaFormat, parseLenient, REVIEW_JSON_SCHEMA, ReviewResult } from "./schemas";
 import type { TriageResult } from "./schemas";
 import { cut } from "./text";
+import { promptTitle } from "./triage";
 
 const REVIEW_BODY_CHARS = 4000;
 const SOURCE_OUTPUT_CHARS = 1500;
@@ -81,7 +82,7 @@ export function buildEvidenceBundle(p: {
     repo: p.input.repo,
     issue: {
       number: p.input.number,
-      title: cut(p.input.title, 300),
+      title: promptTitle(p.input.title),
       body: cut(body, REVIEW_BODY_CHARS),
       body_truncated: body.length > REVIEW_BODY_CHARS,
     },

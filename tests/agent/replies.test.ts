@@ -57,6 +57,26 @@ describe("fixedReply", () => {
     },
   );
 
+  it("budget wording is true for the step the refusal hit", () => {
+    for (const step of [undefined, "triage"] as const) {
+      expect(fixedReply("refused_budget", { retryAfterSec: 60, step })).toContain("has not looked at this issue");
+    }
+    for (const step of ["repro", "review"] as const) {
+      for (const scope of ["user", "api_token"]) {
+        const r = fixedReply("refused_budget", { retryAfterSec: 60, step, scope });
+        expect(r).not.toContain("has not looked");
+        expect(r).toContain("stopped before it could finish an answer");
+      }
+    }
+  });
+
+  it("a held draft (output check) promises no queued post", () => {
+    const r = fixedReply("held_guardrail", { profile: "output" });
+    expect(r).toContain("couldn't send an automatic reply this time");
+    expect(r).not.toMatch(/posted|prepared|held it back|draft|answer is ready/i);
+    expect(r).toContain("follow up");
+  });
+
   it("held reply for the secrets profile tells the reporter to revoke the credential", () => {
     expect(fixedReply("held_guardrail", { profile: "secrets" })).toMatch(/revoke/i);
   });

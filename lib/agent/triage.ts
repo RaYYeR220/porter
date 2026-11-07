@@ -7,7 +7,10 @@ import { jsonSchemaFormat, parseLenient, TRIAGE_JSON_SCHEMA, TriageResult } from
 import { cut } from "./text";
 
 export const MAX_BODY_CHARS = 12_000;
+/** Stored title cap (runs.title). */
 export const MAX_TITLE_CHARS = 300;
+/** Title cap inside any prompt. */
+export const MAX_PROMPT_TITLE_CHARS = 200;
 const FALLBACK_SUMMARY_CHARS = 400;
 
 /** Hosts the triage model may fetch, before any per-repo docs host. */
@@ -20,13 +23,18 @@ export function untrusted(text: string): string {
   return neutraliseMarkers(text).replace(/<(\s*\/?\s*)(issue-body)/gi, "&lt;$1$2");
 }
 
+/** The title as every prompt sees it: one line (all whitespace runs → one space), 200 chars, untrusted. */
+export function promptTitle(title: string): string {
+  return untrusted(cut(title.replace(/\s+/g, " ").trim(), MAX_PROMPT_TITLE_CHARS));
+}
+
 export function allowedFetchDomains(docsHosts: string[] = []): string[] {
   return [...new Set([...FETCH_DOMAINS, ...docsHosts.map((h) => h.trim().toLowerCase()).filter(Boolean)])];
 }
 
 /** The issue as the user message: title, number, delimited body (cut to 12,000 chars with a notice). */
 export function issueBlock(input: IssueInput, maxBody = MAX_BODY_CHARS): string {
-  const title = untrusted(cut(input.title.trim(), MAX_TITLE_CHARS));
+  const title = promptTitle(input.title);
   const raw = input.body ?? "";
   const lines = [
     `Repository: ${input.repo}`,
