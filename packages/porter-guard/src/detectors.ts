@@ -89,7 +89,7 @@ const ADDRESSED_TO_BOT = [
   /!\[[^\]\n]*\]\(\s*https?:/i,
   /\b(?:ignore|disregard|forget)\s+(?:the\s+)?(?:previous|above|prior|all\s+(?:of\s+)?that)\b/i,
   /\b(?:reveal|print|show|repeat|leak|output)\s+(?:your|the)\s+(?:system\s+)?(?:prompt|instructions)\b/i,
-  /\b(?:the\s+)?(?:assistant|ai|bot|agent|llm|model)\s+(?:should|must|will|needs?\s+to)\b/i,
+  /\b(?:the\s+)?(?:assistant|ai|bot|agent)\s+(?:should|must|will|needs?\s+to)\b/i,
   /\byou\s+are\s+(?:a|an|the)\s+\w*\s*(?:assistant|bot|agent)\b/i,
   /\b(?:output|print|dump|send|echo|reveal|leak)\s+(?:me\s+)?(?:the\s+)?(?:contents?\s+of\s+)?(?:your\s+|the\s+)?(?:env(?:ironment)?(?:\s+vars?|\s+variables)?|secrets?|credentials|config)\b/i,
   /^\s*@\w[\w-]*[\s,:]+(?:please\s+)?(?:close|label|approve|merge|assign|reopen|delete|comment|reply|respond|add|remove|mark|tag|run|post|ignore|apply|set|escalate|lock)\b/i,
