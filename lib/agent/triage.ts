@@ -25,7 +25,8 @@ export function untrusted(text: string): string {
 
 /** The title as every prompt sees it: one line (all whitespace runs → one space), 200 chars, untrusted. */
 export function promptTitle(title: string): string {
-  return untrusted(cut(title.replace(/\s+/g, " ").trim(), MAX_PROMPT_TITLE_CHARS));
+  // JS \s already covers U+2028/U+2029; NEL (U+0085) is a line break too but is not in \s.
+  return untrusted(cut(title.replace(/[\s\x85]+/g, " ").trim(), MAX_PROMPT_TITLE_CHARS));
 }
 
 export function allowedFetchDomains(docsHosts: string[] = []): string[] {
