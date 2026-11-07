@@ -76,9 +76,38 @@ export function kindOf(r: Row): keyof typeof QUOTA {
 
 export const isSecurityWorded = (r: Row) => SECURITY_TITLE.test(r.title) || r.labels.includes("area/security");
 
+const lengthOk = (r: Row) => r.body.length >= MIN_BODY && r.body.length <= MAX_BODY;
+const namesAiTool = (r: Row) => AI_TELLS.test(`${r.title}
+${r.body}`);
+const secretShaped = (r: Row) => SECRET_SHAPES.test(`${r.title}
+${r.body}`);
+
 export function eligible(r: Row): boolean {
-  const text = `${r.title}\n${r.body}`;
-  return r.body.length >= MIN_BODY && r.body.length <= MAX_BODY && !AI_TELLS.test(text) && !SECRET_SHAPES.test(text);
+  return lengthOk(r) && !namesAiTool(r) && !secretShaped(r);
+}
+
+export type Meta = {
+  seed: string;
+  repo: string;
+  snapshotIssues: number;
+  /** Issues dropped from the candidate pool because the text names a commercial AI coding assistant or an authorship trailer. */
+  excludedForAssistantNames: { securityPool: number; generalPool: number; total: number };
+  excludedForLength: number;
+  excludedForSecretShape: number;
+};
+
+export function selectionMeta(all: Row[]): Meta {
+  const inLen = all.filter((r) => lengthOk(r) && !secretShaped(r));
+  const named = inLen.filter(namesAiTool);
+  const sec = named.filter(isSecurityWorded).length;
+  return {
+    seed: SEED,
+    repo: REPO,
+    snapshotIssues: all.length,
+    excludedForAssistantNames: { securityPool: sec, generalPool: named.length - sec, total: named.length },
+    excludedForLength: all.filter((r) => !lengthOk(r)).length,
+    excludedForSecretShape: all.filter((r) => lengthOk(r) && secretShaped(r)).length,
+  };
 }
 
 export function select(all: Row[]): BenignCase[] {
@@ -124,11 +153,16 @@ async function main() {
     .from(issues)
     .innerJoin(repos, eq(repos.id, issues.repoId))
     .where(and(eq(repos.fullName, REPO)));
-  const cases = select(rows.map((r) => ({ number: r.number, title: r.title, body: r.body ?? "", labels: r.labels ?? [] })));
+  const all = rows.map((r) => ({ number: r.number, title: r.title, body: r.body ?? "", labels: r.labels ?? [] }));
+  const cases = select(all);
+  const meta = selectionMeta(all);
   if (process.argv.includes("--print")) {
     for (const c of cases) console.log(c.number, c.kind.padEnd(8), c.securityWorded ? "SEC" : "   ", c.title.slice(0, 80));
+    console.log(JSON.stringify(meta));
     return;
   }
+  writeFileSync(join(__dirname, "corpus", "benign.meta.json"), `${JSON.stringify(meta, null, 2)}
+`);
   writeFileSync(join(__dirname, "corpus", "benign.json"), `${JSON.stringify(cases, null, 2)}\n`);
   console.log(`wrote ${cases.length} cases (${cases.filter((c) => c.securityWorded).length} security-worded)`);
 }

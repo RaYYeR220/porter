@@ -1,0 +1,12 @@
+{
+  "seed": "porter-eval-benign-v1",
+  "repo": "mozilla-ai/otari",
+  "snapshotIssues": 574,
+  "excludedForAssistantNames": {
+    "securityPool": 19,
+    "generalPool": 100,
+    "total": 119
+  },
+  "excludedForLength": 98,
+  "excludedForSecretShape": 0
+}
