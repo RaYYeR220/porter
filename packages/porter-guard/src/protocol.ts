@@ -31,6 +31,7 @@ export type SignalId =
   | "ignore_previous"
   | "tool_bait"
   | "exfil_link"
+  | "hidden_comment_suspect"
   | "secret_github_token"
   | "secret_aws_key"
   | "secret_api_key"

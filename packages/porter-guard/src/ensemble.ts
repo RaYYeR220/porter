@@ -28,7 +28,9 @@ export function decide(profile: ProfileName, signals: Signal[], verdicts: ModelV
   }
 
   // prompt-injection
-  const flagged = verdicts.filter((v) => v.flagged === true && (v.score ?? 0) >= 0.5);
+  // A weak hidden-comment signal lowers the bar for a classifier flag from 0.5 to 0.3.
+  const flagMin = signals.some((s) => s.id === "hidden_comment_suspect") ? 0.3 : 0.5;
+  const flagged = verdicts.filter((v) => v.flagged === true && (v.score ?? 0) >= flagMin);
   if (flagged.length) {
     const top = Math.max(...flagged.map((v) => v.score ?? 0));
     const extra = signals.length ? `; signals: ${ids(signals)}` : "";

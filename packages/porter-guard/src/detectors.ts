@@ -67,12 +67,16 @@ const TOOL_BAIT =
   /\b(?:you\s+(?:must|should|need\s+to|will|have\s+to)|please|now)\b[^\n.]{0,50}\b(?:call|invoke|run|execute|use)\b[^\n.]{0,40}\b(?:tool|function|mcp|shell|bash|terminal|command|fetch|search)\b|\btool_calls?\b\s*[:=]/i;
 
 /**
- * A hidden comment is STRONG only when it is addressed to an automated reader or tries to drive
- * tools. Template comments aimed at the human reporter ("Describe the bug", "Redact any API keys",
- * "e.g. ...", questions) match none of these and produce no signal.
+ * Hidden comments are judged in two tiers.
+ * STRONG (blocks alone): explicit bot-address prefixes, tool names and call syntax, role markers,
+ * long-form "ignore previous instructions", "do not mention this", reply/render/append directives
+ * aimed at the answer, markdown images with http URLs.
+ * WEAK (`hidden_comment_suspect`, never blocks alone): phrasings that human template authors also
+ * use ("Print the contents of config.yaml", "Ignore the above if you already filled this in").
+ * The ensemble combines weak with a classifier flag or another deterministic signal.
  */
-const ADDRESSED_TO_BOT = [
-  /(?:^|[.!?\n])\s*(?:(?:ai|llm|triage|automated)[ -]?)?(?:assistant|agent|bot|llm|ai)\s*[:,]/i,
+const STRONG_COMMENT = [
+  /(?:^|[.!?\n])\s*(?:assistant|llm|ai(?:[ -](?:agent|assistant|bot))?|(?:llm|triage|automated)[ -](?:agent|bot|assistant))\s*[:,]/i,
   /^\s*(?:ai|llm|bot|agent)[ -]?instructions?\b/i,
   /\b(?:note|message|instructions?|attention|reminder)s?\s+(?:to|for)\s+(?:the\s+|any\s+|all\s+)?(?:ai|llm|bot|assistant|agent|triage|language model|automated)/i,
   /\bif\s+you\s+(?:are|'re)\s+(?:an?\s+|the\s+)?(?:ai|llm|bot|assistant|agent|language model|automated)/i,
@@ -81,12 +85,15 @@ const ADDRESSED_TO_BOT = [
   /\b(?:when|while|before|after)\s+(?:you\s+are\s+)?(?:replying|responding|answering|commenting|triaging)\b/i,
   /\b(?:reply|respond|answer)\s+(?:with|using)\b/i,
   /\b(?:in|at the (?:end|start) of|into)\s+(?:your|the)\s+(?:reply|answer|response|comment|output)\b/i,
-  /\b(?:render|include|embed|append|prepend|print|output)\s+(?:this|the following|the token|the string|a link|an image)\b/i,
+  /\b(?:render|include|embed|append|prepend)\s+(?:this|the following|the token|the string|a link|an image)\b/i,
   /\btell\s+(?:the\s+)?(?:user|reporter|author)\b/i,
-  /\b(?:you\s+(?:must|should|will|need\s+to|are\s+to)|please)\s+(?:now\s+)?(?:call|close|label|approve|merge|assign|post|run|execute|fetch|reply|respond|append|tell|output|ignore|disregard|send|open|delete)\b/i,
   /\b(?:add|remove|close|post|read|write|create|delete|update|fetch|run|exec|execute|send|set|assign|merge|approve|search|list)_[a-z][a-z_]*\b/,
   /\b[a-z]+_[a-z_]+\s*\(/,
   /!\[[^\]\n]*\]\(\s*https?:/i,
+];
+
+const WEAK_COMMENT = [
+  /(?:^|[.!?\n])\s*(?:agent|bot)\s*[:,]/i,
   /\b(?:ignore|disregard|forget)\s+(?:the\s+)?(?:previous|above|prior|all\s+(?:of\s+)?that)\b/i,
   /\b(?:reveal|print|show|repeat|leak|output)\s+(?:your|the)\s+(?:system\s+)?(?:prompt|instructions)\b/i,
   /\b(?:the\s+)?(?:assistant|ai|bot|agent)\s+(?:should|must|will|needs?\s+to)\b/i,
@@ -94,15 +101,16 @@ const ADDRESSED_TO_BOT = [
   /\b(?:output|print|dump|send|echo|reveal|leak)\s+(?:me\s+)?(?:the\s+)?(?:contents?\s+of\s+)?(?:your\s+|the\s+)?(?:env(?:ironment)?(?:\s+vars?|\s+variables)?|secrets?|credentials|config)\b/i,
   /^\s*@\w[\w-]*[\s,:]+(?:please\s+)?(?:close|label|approve|merge|assign|reopen|delete|comment|reply|respond|add|remove|mark|tag|run|post|ignore|apply|set|escalate|lock)\b/i,
   /(?:^|[.!?\n])\s*(?:triage note|maintainers?(?:'s)? note|maintainers?|system note|admin note)\s*:[^\n]{0,200}?\b(?:approve|auto-approve|merge|close|label|assign|respond|reply)\b/i,
+  /\b(?:you\s+(?:must|should|will|need\s+to|are\s+to)|please)\s+(?:now\s+)?(?:call|close|label|approve|merge|assign|post|run|execute|fetch|reply|respond|append|tell|ignore|disregard|send|open|delete)\b/i,
 ];
 
-function commentIsStrong(body: string): boolean {
-  return (
-    IGNORE_PREVIOUS.test(body) ||
-    ROLE_BLOCK.test(body) ||
-    TOOL_BAIT.test(body) ||
-    ADDRESSED_TO_BOT.some((re) => re.test(body))
-  );
+type Tier = "strong" | "weak" | null;
+
+function commentTier(body: string): Tier {
+  if (IGNORE_PREVIOUS.test(body) || ROLE_BLOCK.test(body) || TOOL_BAIT.test(body) || STRONG_COMMENT.some((re) => re.test(body))) {
+    return "strong";
+  }
+  return WEAK_COMMENT.some((re) => re.test(body)) ? "weak" : null;
 }
 
 /** Linear scan for closed HTML comments; an unclosed "<!--" ends the search. */
@@ -143,20 +151,30 @@ export function detectInjectionSignals(input: string): Signal[] {
   const out: Signal[] = [];
   const add = (id: SignalId, at: number | undefined, len: number) => out.push({ id, excerpt: locate(at, len) });
 
-  let hiddenHit = false;
+  let strongHit = false;
+  let weakAt: { index: number; length: number } | null = null;
   let firstComment: { index: number; length: number } | null = null;
   let combined = "";
   for (const c of htmlComments(unfenced)) {
     firstComment ??= c;
-    if (commentIsStrong(c.body)) {
+    const tier = commentTier(c.body);
+    if (tier === "strong") {
       add("hidden_html_comment", c.index, c.length);
-      hiddenHit = true;
+      strongHit = true;
       break;
     }
+    if (tier === "weak") weakAt ??= c;
     if (combined.length < 8000) combined += c.body.slice(0, 8000 - combined.length) + " ";
   }
   // Instructions split across adjacent comments are only visible when the bodies are joined.
-  if (!hiddenHit && firstComment && commentIsStrong(combined)) add("hidden_html_comment", firstComment.index, firstComment.length);
+  if (!strongHit && firstComment) {
+    const tier = commentTier(combined);
+    if (tier === "strong") {
+      add("hidden_html_comment", firstComment.index, firstComment.length);
+      strongHit = true;
+    } else if (tier === "weak") weakAt ??= firstComment;
+  }
+  if (!strongHit && weakAt) add("hidden_comment_suspect", weakAt.index, weakAt.length);
 
   const zw = find(/[​‌‍⁠﻿]{3,}/, full);
   if (zw) add("zero_width", zw.index, zw[0].length);

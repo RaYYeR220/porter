@@ -67,3 +67,26 @@ describe("decide: shape", () => {
     }
   });
 });
+
+describe("decide: hidden_comment_suspect (weak tier)", () => {
+  it("does not block alone when classifiers are clean", () => {
+    expect(decide("prompt-injection", [sig("hidden_comment_suspect")], [v(false, 0.05), v(false, 0.1)]).valid).toBe(true);
+  });
+  it("blocks together with a low-score classifier flag", () => {
+    expect(decide("prompt-injection", [sig("hidden_comment_suspect")], [v(true, 0.35), v(false, 0.05)]).valid).toBe(false);
+  });
+  it("blocks together with another deterministic signal", () => {
+    expect(decide("prompt-injection", [sig("hidden_comment_suspect"), sig("ignore_previous")], [v(false, 0.05), v(false, 0.1)]).valid).toBe(false);
+  });
+  it("counts like other weak signals when classifiers are unavailable", () => {
+    const r = decide("prompt-injection", [sig("hidden_comment_suspect")], [v(null, null), v(null, null)]);
+    expect(r.valid).toBe(false);
+    expect(r.explanation).not.toBe("classifier_unavailable");
+  });
+  it("a low-score flag alone (no weak signal) still passes", () => {
+    expect(decide("prompt-injection", [], [v(true, 0.35), v(false, 0.05)]).valid).toBe(true);
+  });
+  it("a strong signal alone blocks", () => {
+    expect(decide("prompt-injection", [sig("hidden_html_comment")], [v(false, 0.05), v(false, 0.1)]).valid).toBe(false);
+  });
+});
