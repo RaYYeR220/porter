@@ -14,3 +14,5 @@ function create() {
 export function db() {
   return (cached ??= create());
 }
+
+export type Db = ReturnType<typeof db>;

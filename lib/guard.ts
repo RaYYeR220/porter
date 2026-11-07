@@ -1,5 +1,7 @@
 import { createGuardHandler } from "porter-guard";
 import type { ChatFn } from "porter-guard";
+import { guardVerdictLogger } from "./agent/record";
+import { db } from "./db/client";
 import { createOtariClient } from "./otari/client";
 import { getGuardEnv } from "./env";
 
@@ -27,9 +29,8 @@ export function guardHandler(): Handler {
     cached = createGuardHandler({
       token: env.GUARD_TOKEN,
       chat,
-      onVerdict: async () => {
-        // verdict logging lands with the database
-      },
+      // Inserted after the response is sent; a database failure never changes a verdict.
+      onVerdict: guardVerdictLogger(db),
     });
   }
   return cached;
