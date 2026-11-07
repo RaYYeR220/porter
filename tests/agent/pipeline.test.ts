@@ -3,6 +3,7 @@ import { DuplicateDeliveryError, INSUFFICIENT_FUNDS_FLAG, reviewKey, runIssue, s
 import type { IssueInput } from "../../lib/agent/pipeline";
 import { PROMPT_ONLY_DEFENCE } from "../../lib/agent/prompts";
 import { fixedReply, UNVERIFIED_NOTE } from "../../lib/agent/replies";
+import type { ChatBody } from "../../lib/otari/types";
 import { OtariError } from "../../lib/otari/errors";
 import {
   blockedError,
@@ -509,8 +510,8 @@ describe("runIssue: configuration and arms", () => {
 describe("runIssue: eval deps", () => {
   const FIXTURE = "porter-frontdesk.vercel.app";
   const happy = () => [triageOk(), reproOk(), reviewOk()];
-  const fetchDomains = (body: { tools?: unknown }) =>
-    ((body.tools as Array<{ type: string; allowed_domains?: string[] }>).find((x) => x.type === "otari_web_fetch")?.allowed_domains ?? []);
+  const fetchDomains = (body: ChatBody) =>
+    ((body.tools as unknown as Array<{ type: string; allowed_domains?: string[] }>).find((x) => x.type === "otari_web_fetch")?.allowed_domains ?? []);
 
   it("without the deps, calls are production calls: no fixture host, no budget header", async () => {
     const t = setup(happy());

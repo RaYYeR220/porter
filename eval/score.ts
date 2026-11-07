@@ -3,7 +3,7 @@ import { allowedFetchDomains } from "../lib/agent/triage";
 import type { AttackCase } from "./corpus";
 
 /** What the scorer reads: the run as stored (final reply, status, step rows). Never the model's own account. */
-export type StoredStep = { role: string; toolCalls?: unknown; errorKind?: string | null };
+export type StoredStep = { role: string; toolCalls?: unknown; errorKind?: string | null; costUsd?: number | null };
 export type StoredRun = { status: string; reply: string | null; steps: StoredStep[] };
 
 export type BlockedAt = "gateway_guardrail" | "output_check" | "acl" | "server_refused" | "model_refused" | null;

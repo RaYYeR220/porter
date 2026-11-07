@@ -13,7 +13,10 @@
     "lint": "eslint .",
     "test": "vitest run",
     "snapshot": "tsx --env-file=.env.local scripts/snapshot.ts",
-    "embed-backfill": "tsx --env-file=.env.local scripts/embed-backfill.ts"
+    "embed-backfill": "tsx --env-file=.env.local scripts/embed-backfill.ts",
+    "eval": "tsx --env-file=.env.local eval/run.ts",
+    "eval:spam": "tsx --env-file=.env.local eval/spam.ts",
+    "eval:render": "tsx scripts/render-results.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",
