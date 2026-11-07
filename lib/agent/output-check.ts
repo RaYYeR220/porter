@@ -14,7 +14,8 @@ import { detectInjectionSignals, detectSecrets } from "porter-guard";
 /**
  * Longer replies are held unchecked. A GitHub comment via post_comment is at most 6,000 chars and the
  * pipeline caps replies near 5,100; the cap also bounds micromark's superlinear cases ("*a" or "~a"
- * repeated: 6-7 s for 20,000 chars, well under a second at 6,000).
+ * repeated: 6-7 s for 20,000 chars). Worst case measured at 6,000 chars: about 0.2-0.3 s here, about
+ * 1 s on the reviewer's machine.
  */
 export const MAX_CHECKED_CHARS = 6_000;
 
@@ -100,6 +101,36 @@ const TRAILING = /[.,;:!?*_~'"]+$/;
 const SCHEME_URL = /(?<![a-z])https?:[^\s<>"'`()[\]{}]+/gi;
 /** www. hosts, whatever precedes them (GitHub autolinks them after "_", "*", "(" and more). */
 const WWW_URL = /www\.[^\s<>"'`()[\]{}]+/gi;
+/**
+ * GitHub's cmark-gfm runs a literal autolink to the first ASCII space, tab, LF, FF, CR or "<". JS `\s`
+ * and micromark also stop at VT and Unicode spaces (U+00A0, U+202F, U+2028, U+3000, ...), so
+ * "https://pypi.org<U+00A0>@evil.example" reads as two harmless pieces there but is one link with
+ * host evil.example on GitHub. A second scan therefore runs over a copy where those spaces become
+ * "_" (a URL character that GFM trims at the end); links found in either copy must pass. The
+ * spaces themselves are fine in text (French and CJK typography use them).
+ */
+export function cmarkExtent(text: string): string {
+  return text.replace(/[^\S \t\n\f\r]/g, "_");
+}
+const EXTENT_SCHEME_URL = /(?<![a-z])https?:[^ \t\n\f\r<]+/gi;
+const EXTENT_WWW_URL = /www\.[^ \t\n\f\r<]+/gi;
+
+/**
+ * GFM's end-of-autolink rules: trailing ?!.,:*_~ (plus ; quotes and backticks) are dropped, an
+ * unbalanced trailing ")" is dropped, and so is an entity-like "&name;". Dropping trailing characters
+ * is safe: whatever GitHub keeps there only appends junk to the host, never swaps it.
+ */
+function gfmTrim(url: string): string {
+  let s = url;
+  for (let i = 0; i < 50; i++) {
+    const before = s;
+    s = s.replace(/[?!.,:;*_~'"`]+$/, "").replace(/&[A-Za-z0-9]+;$/, "");
+    if (s.endsWith(")") && s.split(")").length > s.split("(").length) s = s.slice(0, -1);
+    if (s === before) break;
+  }
+  return s;
+}
+
 /** Email autolinks: the domain is checked like a link host. The last label needs a letter (not "pkg@2.1.0"). Bounded parts keep it linear. */
 const EMAIL = /[A-Za-z0-9._%+-]{1,64}@([A-Za-z0-9-]{1,63}(?:\.[A-Za-z0-9-]{1,63}){0,8}\.[A-Za-z][A-Za-z0-9-]{0,62})/g;
 /** Protocol-relative targets in markdown links, reference definitions and HTML attributes. */
@@ -184,6 +215,14 @@ class Findings {
     if (HTML_ATTR.test(text)) this.reasons.add("html_attribute");
   }
 
+  /** Literal autolinks at GitHub's extent (see cmarkExtent). */
+  scanExtent(text: string): void {
+    const t = cmarkExtent(text);
+    for (const m of t.matchAll(EXTENT_SCHEME_URL)) this.url(gfmTrim(m[0]));
+    for (const m of t.replace(EXTENT_SCHEME_URL, " ").matchAll(EXTENT_WWW_URL)) this.url(`https://${gfmTrim(m[0])}`);
+    for (const m of t.matchAll(EMAIL)) if (!emailAllowed(m[1], this.hosts)) this.reasons.add("email_not_allowed");
+  }
+
   scanRendered(reply: string): void {
     let r: ReturnType<typeof renderGfm>;
     try {
@@ -215,6 +254,7 @@ export function checkOutput(reply: string, ctx: { repo: string; runId: string; d
     if (/porter[-_]run/i.test(text) || text.toLowerCase().includes(ctx.runId.toLowerCase())) f.reasons.add("run_marker");
     if (text.includes("<!--")) f.reasons.add("html_comment");
     f.scanText(text);
+    f.scanExtent(text);
   }
   f.scanRendered(reply);
   // Reasons are ids only: nothing from the draft (hosts, text) is stored.

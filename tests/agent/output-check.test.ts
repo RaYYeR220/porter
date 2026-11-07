@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkOutput, decodeEntities, MAX_CHECKED_CHARS, normaliseForScan } from "../../lib/agent/output-check";
+import { checkOutput, cmarkExtent, decodeEntities, MAX_CHECKED_CHARS, normaliseForScan } from "../../lib/agent/output-check";
 
 const RUN_ID = "3f2b8c1e-9d4a-4b6e-8f10-2a3b4c5d6e7f";
 const ctx = { repo: "acme/widgets", runId: RUN_ID, docsHosts: ["widgets.readthedocs.io"] };
@@ -200,4 +200,64 @@ describe("checkOutput: size and cost bounds", () => {
       expect(performance.now() - t0).toBeLessThan(2000);
     },
   );
+});
+
+/** Spaces that end a URL for JS and micromark but not for GitHub's cmark-gfm autolinker. */
+const ch = (cp: number) => String.fromCharCode(cp);
+const NBSP = ch(0xa0);
+const NNBSP = ch(0x202f);
+const IDEO = ch(0x3000);
+const NON_ASCII_SPACES = [0x0b, 0xa0, 0x1680, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009, 0x200a, 0x2028, 0x2029, 0x202f, 0x205f, 0x3000];
+
+describe("checkOutput: autolinks run to GitHub's extent", () => {
+  it.each([
+    ["U+00A0", `Upgrade: https://pypi.org${NBSP}@evil.example/login`],
+    ["U+2028", `Upgrade: https://pypi.org${ch(0x2028)}@evil.example/login`],
+    ["U+2029", `Upgrade: https://pypi.org${ch(0x2029)}@evil.example/login`],
+    ["U+3000", `Upgrade: https://pypi.org${IDEO}@evil.example/login`],
+    ["U+202F", `Upgrade: https://pypi.org${NNBSP}@evil.example/login`],
+    ["U+000B", `Upgrade: https://pypi.org${ch(0x0b)}@evil.example/login`],
+    ["a port after the space", `Upgrade: https://pypi.org${NBSP}:443@evil.example/login`],
+    ["a www autolink", `See www.npmjs.com${NBSP}@evil.example/x`],
+  ])("holds the confirmed GitHub sample with %s", (_name, reply) => {
+    expect(check(reply).valid).toBe(false);
+  });
+
+  const hosts = ["https://pypi.org", "https://docs.python.org", "www.npmjs.com"];
+  it.each(NON_ASCII_SPACES.flatMap((cp) => hosts.map((h) => [`U+${cp.toString(16).toUpperCase().padStart(4, "0")}`, h, cp] as const)))(
+    "holds %s between %s and @evil.example",
+    (_name, host, cp) => {
+      expect(check(`Upgrade: ${host}${ch(cp)}@evil.example/login`).valid).toBe(false);
+    },
+  );
+
+  it("cmarkExtent turns only non-ASCII whitespace and VT into a URL character", () => {
+    expect(cmarkExtent(`a${NBSP}b c\td\ne${ch(0x0b)}f${IDEO}g`)).toBe("a_b c\td\ne_f_g");
+  });
+
+  it.each([
+    ["French typography with U+202F", `Prix${NNBSP}: 3${NNBSP}€, livraison${NBSP}: 2${NBSP}jours${NNBSP}!`],
+    ["CJK with U+3000", `你好${IDEO}世界`],
+    ["a URL followed by U+00A0 and punctuation", `Voir https://docs.python.org/3/${NBSP}: c'est documenté.`],
+    ["a URL in guillemets", `«${NBSP}https://pypi.org/project/widgets/${NBSP}»`],
+    ["a URL in parentheses", "Upgrade (see https://pypi.org/project/widgets/) and retry."],
+    ["a URL at the end of a sentence", "Docs: https://docs.python.org/3/library/re.html."],
+    ["a link in a markdown link", "See [#7](https://github.com/acme/widgets/issues/7) for details."],
+    ["a URL in a code span", "Run `pip install https://pypi.org/simple/widgets` again."],
+  ])("does not hold %s", (_name, reply) => {
+    expect(check(reply)).toEqual({ valid: true, reasons: [] });
+  });
+
+  it.each([
+    ["https://x + U+00A0", `https://x${NBSP}`],
+    ["www.a + U+00A0", `www.a${NBSP}`],
+    ["a@b + U+00A0", `a@b${NBSP}`],
+    ["U+00A0", NBSP],
+    ["a URL then closing parens", `https://pypi.org/${")".repeat(6_000)}`],
+  ])("the extent scan stays fast on 6,000 chars of %s", (_name, unit) => {
+    const reply = unit.length > 100 ? unit.slice(0, 6_000) : unit.repeat(Math.floor(6_000 / unit.length));
+    const t0 = performance.now();
+    checkOutput(reply, ctx);
+    expect(performance.now() - t0).toBeLessThan(2000);
+  });
 });
