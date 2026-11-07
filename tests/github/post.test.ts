@@ -19,6 +19,24 @@ describe("postReply", () => {
     expect(queue).not.toHaveBeenCalled();
   });
 
+  it("queues the reply with the error class and status when GitHub rejects the post", async () => {
+    const w = writer();
+    w.postComment.mockRejectedValueOnce(Object.assign(new Error("secret detail"), { status: 502 }));
+    const queue = vi.fn(async () => undefined);
+    const r = await postReply("o/r", 3, "Hello", { writer: w, withinLimit: async () => true, queue }, "run-1");
+    expect(r).toBe("queued");
+    expect(queue).toHaveBeenCalledWith(expect.objectContaining({ runId: "run-1", reason: "post_failed", error: { name: "Error", status: 502 } }));
+    expect(JSON.stringify(queue.mock.calls)).not.toContain("secret detail");
+  });
+
+  it("exempt confirmations skip the limiter", async () => {
+    const w = writer();
+    const withinLimit = vi.fn(async () => false);
+    const r = await postReply("o/r", 3, "ok", { writer: w, withinLimit, queue: vi.fn() }, undefined, { exempt: true });
+    expect(r).toBe("posted");
+    expect(withinLimit).not.toHaveBeenCalled();
+  });
+
   it("queues instead of posting or dropping when over the limit", async () => {
     const w = writer();
     const queue = vi.fn(async () => undefined);
@@ -49,6 +67,7 @@ function services(over: Partial<Services> = {}): Services & { post: ReturnType<t
     command: vi.fn(async () => "done"),
     withinWriteLimit: vi.fn(async () => true),
     releaseDelivery: vi.fn(async () => undefined),
+    recordError: vi.fn(async () => undefined),
     ...over,
   } as never;
 }
@@ -101,13 +120,20 @@ describe("processJob", () => {
     const s = services();
     await processJob(cmdRoute("approve"), "d", s);
     expect(s.command).toHaveBeenCalled();
-    expect(s.post).toHaveBeenCalledWith("o/r", 3, "done");
+    expect(s.post).toHaveBeenCalledWith("o/r", 3, "done", undefined, { exempt: true });
   });
 
   it("an approve over the write limit is not executed and says so", async () => {
     const s = services({ withinWriteLimit: vi.fn(async () => false) });
     await processJob(cmdRoute("approve"), "d", s);
     expect(s.command).not.toHaveBeenCalled();
-    expect(s.post).toHaveBeenCalledWith("o/r", 3, QUEUED_COMMAND_REPLY);
+    expect(s.post).toHaveBeenCalledWith("o/r", 3, QUEUED_COMMAND_REPLY, undefined, { exempt: true });
+    expect(s.withinWriteLimit).toHaveBeenCalledTimes(1);
+  });
+
+  it("a failing job leaves a durable webhook_error trace", async () => {
+    const s = services({ command: vi.fn(async () => Promise.reject(new TypeError("x"))) });
+    await processJob(cmdRoute("reject"), "d9", s, "issue_comment");
+    expect(s.recordError).toHaveBeenCalledWith("d9", "issue_comment", expect.any(TypeError));
   });
 });

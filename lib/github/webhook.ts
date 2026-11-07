@@ -2,6 +2,7 @@ import { verify } from "@octokit/webhooks-methods";
 import { DuplicateDeliveryError } from "../agent/pipeline";
 import type { IssueInput, RunOutcome } from "../agent/pipeline";
 import { parseCommand } from "./commands";
+import { endUserIdForLogin } from "./ids";
 import type { Command } from "./commands";
 
 /** Constant-time HMAC check of the raw body against X-Hub-Signature-256. Never throws. */
@@ -86,7 +87,7 @@ export async function routeEvent(name: string, deliveryId: string, payload: unkn
           number: issue.number,
           title,
           body: issue.body ?? "",
-          authorExternalId: `gh:${login}`,
+          authorExternalId: endUserIdForLogin(login),
           deliveryId,
         },
       },
@@ -119,7 +120,7 @@ export async function routeEvent(name: string, deliveryId: string, payload: unkn
           number: issue.number,
           title,
           body: comment.body,
-          authorExternalId: `gh:${login}`,
+          authorExternalId: endUserIdForLogin(login),
           deliveryId,
         },
       },
@@ -131,18 +132,20 @@ export async function routeEvent(name: string, deliveryId: string, payload: unkn
 export type Services = {
   run: (input: IssueInput) => Promise<RunOutcome>;
   /** Posts one comment (rate limited, queued when over the limit). */
-  post: (repo: string, issueNumber: number, body: string, runId?: string) => Promise<"posted" | "queued">;
+  post: (repo: string, issueNumber: number, body: string, runId?: string, opts?: { exempt?: boolean }) => Promise<"posted" | "queued">;
   command: (job: CommandJob) => Promise<string>;
   /** Whether a write to the repo is still within the hourly allowance. */
   withinWriteLimit: (repo: string) => Promise<boolean>;
   releaseDelivery: (deliveryId: string) => Promise<void>;
+  /** Durable trace of a failed delivery (kv webhook_error:<id>). */
+  recordError: (deliveryId: string, event: string, e: unknown) => Promise<void>;
 };
 
 export const QUEUED_COMMAND_REPLY =
   "The hourly limit for automated actions on this repository is reached, so this command was not run. The proposal stays pending; send the command again later.";
 
 /** Carries out a routed job. Never throws: failures are logged by name only. */
-export async function processJob(route: Route, deliveryId: string, s: Services): Promise<void> {
+export async function processJob(route: Route, deliveryId: string, s: Services, event = ""): Promise<void> {
   const job = route.job;
   if (route.action === "ignore" || !job) return;
   try {
@@ -165,12 +168,14 @@ export async function processJob(route: Route, deliveryId: string, s: Services):
     const mutates = job.command.cmd === "approve";
     if (mutates && !(await s.withinWriteLimit(job.repo))) {
       console.warn(`porter: write limit reached for ${job.repo}; approve left pending`);
-      await s.post(job.repo, job.issueNumber, QUEUED_COMMAND_REPLY);
+      await s.post(job.repo, job.issueNumber, QUEUED_COMMAND_REPLY, undefined, { exempt: true });
       return;
     }
     const text = await s.command(job);
-    await s.post(job.repo, job.issueNumber, text);
+    // A confirmation answers a maintainer's own comment 1:1, so it is exempt from the write limiter.
+    await s.post(job.repo, job.issueNumber, text, undefined, { exempt: true });
   } catch (e) {
     console.warn(`porter webhook job failed: ${e instanceof Error ? e.name : "error"}`);
+    await s.recordError(deliveryId, event, e).catch(() => undefined);
   }
 }

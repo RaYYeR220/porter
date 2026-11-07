@@ -82,6 +82,11 @@ describe("routeEvent", () => {
     });
   });
 
+  it("the run's end-user id is lower-cased, matching /porter block", async () => {
+    const r = await routeEvent("issues", "dc", issuesOpened({ author: user("Mallory") }), deps());
+    expect(r.job).toMatchObject({ input: { authorExternalId: "gh:mallory" } });
+  });
+
   it("a mention of a different app is not a mention", async () => {
     const p = issueComment({ body: `@${SLUG}-other hi` });
     expect((await routeEvent("issue_comment", "d6", p, deps())).action).toBe("ignore");

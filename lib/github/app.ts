@@ -45,12 +45,21 @@ export function routeDeps(): RouteDeps {
   };
 }
 
+/** Durable trace of a failed delivery: class name only, kept 7 days. */
+export async function recordWebhookError(deliveryId: string, event: string, e: unknown): Promise<void> {
+  await createDbRecorder(db()).putKv(
+    `webhook_error:${deliveryId}`,
+    { event, error: e instanceof Error ? e.name : "Error", at: new Date().toISOString() },
+    new Date(Date.now() + DELIVERY_TTL_MS),
+  );
+}
+
 /** Production wiring: stranger arm for issue content, maintainer key only for /porter commands. */
 export function productionServices(): Services {
   const writer = githubAppWriter(demoInstallationId);
   const withinWriteLimit = (repo: string) => ratelimit(repoWriteKey(repo), WRITES_PER_HOUR, 3600);
   const recorder = createDbRecorder(db());
-  const post: Services["post"] = (repo, issueNumber, body, runId) =>
+  const post: Services["post"] = (repo, issueNumber, body, runId, opts) =>
     postReply(
       repo,
       issueNumber,
@@ -59,22 +68,24 @@ export function productionServices(): Services {
         writer,
         withinLimit: withinWriteLimit,
         queue: async (item) => {
-          await recorder.putKv(`queued_reply:${item.runId ?? randomUUID()}`, { ...item, reason: "queued_rate_limited", queuedAt: new Date().toISOString() }, null);
+          await recorder.putKv(`queued_reply:${item.runId ?? randomUUID()}`, { ...item, queuedAt: new Date().toISOString() }, null);
           if (item.runId) {
             await recorder.addStep(item.runId, {
               role: "warning", requestedModel: null, servedModel: null, provider: null, fallback: false, attemptCount: null,
               requestId: null, costUsd: null, durationMs: null, guardrails: null, toolCalls: null,
-              errorKind: "queued_rate_limited", errorStatus: null,
+              errorKind: item.reason, errorStatus: item.error?.status ?? null,
             });
           }
         },
       },
       runId,
+      opts,
     );
   return {
     run: async (input) => runIssue(input, { otari: armClient("porter").otari, recorder }),
     post,
     withinWriteLimit,
+    recordError: recordWebhookError,
     releaseDelivery: async (deliveryId) => {
       await db().delete(kv).where(eq(kv.key, `delivery:${deliveryId}`));
     },

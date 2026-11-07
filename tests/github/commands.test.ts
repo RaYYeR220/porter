@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { endUserIdForLogin } from "../../lib/github/ids";
 import { applyProposal, executeCommand, parseCommand, rejectProposal } from "../../lib/github/commands";
 import type { ProposalStore, StoredProposal } from "../../lib/github/commands";
 
@@ -173,6 +174,19 @@ describe("rejectProposal / executeCommand", () => {
     expect(put).toHaveBeenCalledWith("gh:alice", "budget-regular");
     expect(await executeCommand({ cmd: "block", arg: "mallory" }, ctx, deps)).toContain("@mallory");
     expect(patch).toHaveBeenCalledWith("gh:mallory", { blocked: true });
+  });
+
+  it("block/upgrade of a differently-cased login hit the same end-user id as the run", async () => {
+    const put = vi.fn(async () => ({}));
+    const patch = vi.fn(async () => ({}));
+    const { store } = fakeStore();
+    const deps = { store, otari: fakeMcp().otari, mcpServerId: "s", strangers: { endUsers: { put, patch } as never }, regularBudgetId: () => "b" };
+    const runId = endUserIdForLogin("Mallory");
+    await executeCommand({ cmd: "block", arg: "mallory" }, ctx, deps);
+    await executeCommand({ cmd: "upgrade", arg: "MALLORY" }, ctx, deps);
+    expect(patch).toHaveBeenCalledWith(runId, { blocked: true });
+    expect(put).toHaveBeenCalledWith(runId, "b");
+    expect(runId).toBe("gh:mallory");
   });
 
   it("a failing Otari call yields a fixed failure text, not the error", async () => {

@@ -2,6 +2,7 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { db as defaultDb } from "../db/client";
 import { proposals, runs } from "../db/schema";
 import type { OtariClient } from "../otari/client";
+import { endUserIdForLogin } from "./ids";
 
 export type Command = { cmd: "approve" | "reject" | "upgrade" | "block"; arg: string };
 
@@ -63,7 +64,7 @@ export function drizzleProposalStore(getDb = defaultDb): ProposalStore {
     },
     async latestPending(repo, issueNumber) {
       const [r] = await select()
-        .where(and(eq(runs.repo, repo), eq(runs.issueNumber, issueNumber), eq(proposals.status, "pending")))
+        .where(and(eq(runs.repo, repo), eq(runs.issueNumber, issueNumber), eq(proposals.status, "pending"), isNull(proposals.decidedAt)))
         .orderBy(desc(proposals.id))
         .limit(1);
       return r ? shape(r) : null;
@@ -183,14 +184,14 @@ export const COMMAND_REPLIES = {
 
 /** Runs a parsed command and returns the confirmation text to post. */
 export async function executeCommand(c: Command, ctx: CommandContext, deps: CommandDeps): Promise<string> {
-  const decidedBy = `gh:${ctx.actor}`;
+  const decidedBy = endUserIdForLogin(ctx.actor);
   try {
     if (c.cmd === "upgrade") {
-      await deps.strangers.endUsers.put(`gh:${c.arg}`, deps.regularBudgetId());
+      await deps.strangers.endUsers.put(endUserIdForLogin(c.arg), deps.regularBudgetId());
       return COMMAND_REPLIES.upgraded(c.arg);
     }
     if (c.cmd === "block") {
-      await deps.strangers.endUsers.patch(`gh:${c.arg}`, { blocked: true });
+      await deps.strangers.endUsers.patch(endUserIdForLogin(c.arg), { blocked: true });
       return COMMAND_REPLIES.blocked(c.arg);
     }
     const target = c.arg === "" ? await deps.store.latestPending(ctx.repo, ctx.issueNumber) : await deps.store.load(Number(c.arg));

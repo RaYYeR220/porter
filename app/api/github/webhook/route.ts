@@ -1,5 +1,5 @@
 import { after } from "next/server";
-import { productionServices, routeDeps } from "../../../../lib/github/app";
+import { productionServices, recordWebhookError, routeDeps } from "../../../../lib/github/app";
 import { processJob, routeEvent, verifySignature } from "../../../../lib/github/webhook";
 import { getGithubEnv } from "../../../../lib/env";
 
@@ -34,9 +34,10 @@ export async function POST(req: Request): Promise<Response> {
   after(async () => {
     try {
       const route = await routeEvent(event, deliveryId, payload, routeDeps());
-      await processJob(route, deliveryId, productionServices());
+      await processJob(route, deliveryId, productionServices(), event);
     } catch (e) {
       console.warn(`porter webhook failed: ${e instanceof Error ? e.name : "error"}`);
+      await recordWebhookError(deliveryId, event, e).catch(() => undefined);
     }
   });
   return Response.json({ accepted: true }, { status: 202 });

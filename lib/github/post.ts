@@ -7,7 +7,15 @@ export function withRunFooter(body: string, runId: string): string {
   return `${body.trimEnd()}\n\n---\n<sub>Porter run: ${RUN_PAGE_BASE}${runId}</sub>`;
 }
 
-export type QueuedReply = { repo: string; issueNumber: number; body: string; runId?: string };
+export type QueuedReply = {
+  repo: string;
+  issueNumber: number;
+  body: string;
+  runId?: string;
+  reason: "queued_rate_limited" | "post_failed";
+  /** Error class and HTTP status only, never the message. */
+  error?: { name: string; status: number | null };
+};
 
 export type PostDeps = {
   writer: GitHubWriter;
@@ -27,13 +35,25 @@ export async function postReply(
   body: string,
   deps: PostDeps,
   runId?: string,
+  opts: { exempt?: boolean } = {},
 ): Promise<"posted" | "queued"> {
   const text = runId ? withRunFooter(body, runId) : body;
-  if (!(await deps.withinLimit(repo))) {
+  if (!opts.exempt && !(await deps.withinLimit(repo))) {
     console.warn(`porter: write limit reached for ${repo}; reply queued`);
-    await deps.queue({ repo, issueNumber, body: text, runId });
+    await deps.queue({ repo, issueNumber, body: text, runId, reason: "queued_rate_limited" });
     return "queued";
   }
-  await deps.writer.postComment(repo, issueNumber, text);
+  try {
+    await deps.writer.postComment(repo, issueNumber, text);
+  } catch (e) {
+    // The reply must not be lost: keep it like a rate-limited one.
+    const status = (e as { status?: unknown } | null)?.status;
+    console.warn(`porter: posting to ${repo} failed; reply queued`);
+    await deps.queue({
+      repo, issueNumber, body: text, runId, reason: "post_failed",
+      error: { name: e instanceof Error ? e.name : "Error", status: typeof status === "number" ? status : null },
+    });
+    return "queued";
+  }
   return "posted";
 }
