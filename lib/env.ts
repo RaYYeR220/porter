@@ -37,3 +37,12 @@ export function getEnv(): Env {
   }
   return parsed.data;
 }
+
+const guardSchema = schema.pick({ OTARI_BASE_URL: true, GUARD_TOKEN: true }).extend({ OTARI_KEY_GUARD: z.string().min(1).optional() });
+
+/** Narrow env for the guard service so it can run before the rest of the app is configured. */
+export function getGuardEnv() {
+  const parsed = guardSchema.safeParse(process.env);
+  if (!parsed.success) throw new Error("Missing or invalid environment variables: GUARD_TOKEN");
+  return parsed.data;
+}

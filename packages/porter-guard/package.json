@@ -1,0 +1,19 @@
+{
+  "name": "porter-guard",
+  "version": "0.1.0",
+  "description": "Guardrail service for the hosted Otari gateway, backed by open-weight safety models.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node src/server.ts"
+  }
+}
