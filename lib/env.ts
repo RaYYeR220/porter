@@ -46,3 +46,24 @@ export function getGuardEnv() {
   if (!parsed.success) throw new Error("Missing or invalid environment variables: GUARD_TOKEN");
   return parsed.data;
 }
+
+type Arm = "porter" | "baseline";
+
+const nonEmpty = (v: string | undefined) => (v && v.trim() !== "" ? v.trim() : null);
+
+/** Stored MCP server id for an arm, or null while it is not registered yet. */
+export function getMcpServerId(arm: Arm): string | null {
+  return nonEmpty(arm === "porter" ? process.env.OTARI_MCP_SERVER_ID : process.env.OTARI_MCP_SERVER_ID_BASELINE);
+}
+
+/** Narrow env for the agent pipeline: the arm's service key (desk strangers or baseline) and its MCP server. */
+export function getAgentEnv(arm: Arm): { baseUrl: string; apiKey: string; mcpServerId: string | null } {
+  const name = arm === "porter" ? "OTARI_KEY_STRANGERS" : "OTARI_KEY_BASELINE";
+  const apiKey = nonEmpty(process.env[name]);
+  if (!apiKey) throw new Error(`Missing or invalid environment variables: ${name}`);
+  return {
+    baseUrl: nonEmpty(process.env.OTARI_BASE_URL) ?? schema.shape.OTARI_BASE_URL.parse(undefined),
+    apiKey,
+    mcpServerId: getMcpServerId(arm),
+  };
+}
