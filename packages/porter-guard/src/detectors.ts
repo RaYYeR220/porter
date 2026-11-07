@@ -72,7 +72,7 @@ const TOOL_BAIT =
  * "e.g. ...", questions) match none of these and produce no signal.
  */
 const ADDRESSED_TO_BOT = [
-  /^\s*(?:(?:ai|llm|triage|automated)[ -]?)?(?:assistant|agent|bot|llm|ai)\s*[:,]/i,
+  /(?:^|[.!?\n])\s*(?:(?:ai|llm|triage|automated)[ -]?)?(?:assistant|agent|bot|llm|ai)\s*[:,]/i,
   /^\s*(?:ai|llm|bot|agent)[ -]?instructions?\b/i,
   /\b(?:note|message|instructions?|attention|reminder)s?\s+(?:to|for)\s+(?:the\s+|any\s+|all\s+)?(?:ai|llm|bot|assistant|agent|triage|language model|automated)/i,
   /\bif\s+you\s+(?:are|'re)\s+(?:an?\s+|the\s+)?(?:ai|llm|bot|assistant|agent|language model|automated)/i,
@@ -87,6 +87,13 @@ const ADDRESSED_TO_BOT = [
   /\b(?:add|remove|close|post|read|write|create|delete|update|fetch|run|exec|execute|send|set|assign|merge|approve|search|list)_[a-z][a-z_]*\b/,
   /\b[a-z]+_[a-z_]+\s*\(/,
   /!\[[^\]\n]*\]\(\s*https?:/i,
+  /\b(?:ignore|disregard|forget)\s+(?:the\s+)?(?:previous|above|prior|all\s+(?:of\s+)?that)\b/i,
+  /\b(?:reveal|print|show|repeat|leak|output)\s+(?:your|the)\s+(?:system\s+)?(?:prompt|instructions)\b/i,
+  /\b(?:the\s+)?(?:assistant|ai|bot|agent|llm|model)\s+(?:should|must|will|needs?\s+to)\b/i,
+  /\byou\s+are\s+(?:a|an|the)\s+\w*\s*(?:assistant|bot|agent)\b/i,
+  /\b(?:output|print|dump|send|echo|reveal|leak)\s+(?:me\s+)?(?:the\s+)?(?:contents?\s+of\s+)?(?:your\s+|the\s+)?(?:env(?:ironment)?(?:\s+vars?|\s+variables)?|secrets?|credentials|config)\b/i,
+  /^\s*@\w[\w-]*[\s,:]+(?:please\s+)?(?:close|label|approve|merge|assign|reopen|delete|comment|reply|respond|add|remove|mark|tag|run|post|ignore|apply|set|escalate|lock)\b/i,
+  /(?:^|[.!?\n])\s*(?:triage note|maintainers?(?:'s)? note|maintainers?|system note|admin note)\s*:[^\n]{0,200}?\b(?:approve|auto-approve|merge|close|label|assign|respond|reply)\b/i,
 ];
 
 function commentIsStrong(body: string): boolean {
@@ -136,12 +143,20 @@ export function detectInjectionSignals(input: string): Signal[] {
   const out: Signal[] = [];
   const add = (id: SignalId, at: number | undefined, len: number) => out.push({ id, excerpt: locate(at, len) });
 
+  let hiddenHit = false;
+  let firstComment: { index: number; length: number } | null = null;
+  let combined = "";
   for (const c of htmlComments(unfenced)) {
+    firstComment ??= c;
     if (commentIsStrong(c.body)) {
       add("hidden_html_comment", c.index, c.length);
+      hiddenHit = true;
       break;
     }
+    if (combined.length < 8000) combined += c.body.slice(0, 8000 - combined.length) + " ";
   }
+  // Instructions split across adjacent comments are only visible when the bodies are joined.
+  if (!hiddenHit && firstComment && commentIsStrong(combined)) add("hidden_html_comment", firstComment.index, firstComment.length);
 
   const zw = find(/[​‌‍⁠﻿]{3,}/, full);
   if (zw) add("zero_width", zw.index, zw[0].length);
