@@ -1,6 +1,6 @@
 /**
  * Shadow run over the real open issues of mozilla-ai/otari.
- *   pnpm shadow [--dry-run] [--max-usd N] [--sample 40] [--seed porter-shadow-v1] [--ids 1,2]
+ *   pnpm shadow [--dry-run] [--max-usd N] [--sample 40] [--seed porter-shadow-v1] [--ids 1,2] [--resume] [--fresh]
  *
  * Sample: the newest half of the open issues plus a seeded-random half of the rest, never an issue the
  * eval corpus uses (eval/corpus/benign.json). Every issue runs through the production pipeline as source
@@ -8,26 +8,45 @@
  * write tools refuse, and nothing is posted to GitHub. Writes results/shadow-otari.json (verified: null on every
  * claim until scripts/shadow-verify.ts records a human verdict).
  *
+ * The file is written atomically after every issue, re-reading it first so verdicts recorded meanwhile survive;
+ * results/.shadow.lock keeps shadow:verify from writing during a run. A file sampled with another seed is never
+ * mixed with a new run: pass --fresh to archive it to results/shadow-otari.<timestamp>.json and start over.
+ * --resume skips issues that already have a row under this seed unless that row is failed or was refused
+ * funds/budget (nothing was served), so a restart never bills an issue twice. --ids adds listed open issues to the
+ * file (reported as addedIds; the sample size is not changed).
+ *
  * --max-usd caps generation spend (desk workspace); guard-model calls bill to the guard workspace and are not counted.
  * --dry-run prints the sample and a cost estimate, makes no Otari call, writes nothing.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, renameSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
 import { eq } from "drizzle-orm";
 import { dryRun, formatDryRun } from "../eval/harness";
+import type { Planned } from "../eval/harness";
 import { loadBenign } from "../eval/corpus";
 import { armClient, runIssue } from "../lib/agent/pipeline";
 import { db } from "../lib/db/client";
 import { runs } from "../lib/db/schema";
 import { getRegularBudgetId } from "../lib/env";
-import { buildShadowFile, DEFAULT_SAMPLE, DEFAULT_SEED, sampleIssues } from "../lib/shadow";
-import type { ShadowFile, ShadowIssue, SnapshotIssue } from "../lib/shadow";
+import {
+  acquireLock,
+  assertNoVerdictLoss,
+  assertSameSeed,
+  DEFAULT_SAMPLE,
+  DEFAULT_SEED,
+  readShadowFile,
+  releaseLock,
+  RESULTS_DIR,
+  RESULTS_FILE,
+  RETRYABLE,
+  sampleIssues,
+  writeMerged,
+} from "../lib/shadow";
+import type { ShadowFile, SnapshotIssue } from "../lib/shadow";
 import { isOpen, loadSnapshot } from "./shadow-db";
 import { planShadow, runShadow } from "./shadow-core";
 import type { ShadowPorts } from "./shadow-core";
-
-export const RESULTS_FILE = join(__dirname, "..", "results", "shadow-otari.json");
 
 export function parseCli(argv: string[]) {
   const { values } = parseArgs({
@@ -38,6 +57,8 @@ export function parseCli(argv: string[]) {
       sample: { type: "string", default: String(DEFAULT_SAMPLE) },
       seed: { type: "string", default: DEFAULT_SEED },
       ids: { type: "string" },
+      resume: { type: "boolean", default: false },
+      fresh: { type: "boolean", default: false },
     },
   });
   const maxUsd = values["max-usd"] === undefined ? undefined : Number(values["max-usd"]);
@@ -46,7 +67,16 @@ export function parseCli(argv: string[]) {
   if (!Number.isInteger(sample) || sample < 1) throw new Error("--sample must be a positive integer");
   const ids = values.ids ? values.ids.split(",").map((s) => Number(s.trim())) : undefined;
   if (ids && (ids.length === 0 || ids.some((n) => !Number.isInteger(n) || n < 1))) throw new Error("--ids must be a comma-separated list of issue numbers");
-  return { dryRun: values["dry-run"] === true, maxUsd, sample, seed: values.seed as string, ids };
+  if (values.resume && values.fresh) throw new Error("--resume and --fresh contradict each other");
+  return {
+    dryRun: values["dry-run"] === true,
+    maxUsd,
+    sample,
+    seed: values.seed as string,
+    ids,
+    resume: values.resume === true,
+    fresh: values.fresh === true,
+  };
 }
 
 /** The ordered sample: --ids picks exactly those open issues, otherwise newest half + seeded random half. */
@@ -60,17 +90,25 @@ export function chooseSample(open: SnapshotIssue[], cli: { sample: number; seed:
   return sampleIssues(open, { size: cli.sample, seed: cli.seed, exclude });
 }
 
-/** Rows from a new invocation replace stored rows of the same issue; other stored rows stay. Reruns never drop a human verdict. */
-export function mergeShadow(previous: ShadowIssue[], fresh: ShadowIssue[], order: number[]): ShadowIssue[] {
-  const byNumber = new Map(previous.map((i) => [i.number, i]));
-  for (const f of fresh) {
-    const old = byNumber.get(f.number);
-    const hadVerdict = old && (old.duplicates.some((d) => d.verified !== null) || (old.fixed_in && old.fixed_in.verified !== null));
-    if (hadVerdict) throw new Error(`#${f.number} already has a hand-checked verdict; rerunning would discard it (move results/shadow-otari.json aside to start over)`);
-    byNumber.set(f.number, f);
-  }
-  const rank = new Map(order.map((n, i) => [n, i]));
-  return [...byNumber.values()].sort((a, b) => (rank.get(a.number) ?? 1e9) - (rank.get(b.number) ?? 1e9) || a.number - b.number);
+/**
+ * Every pre-spend check, and the plan left to run. Throws on a seed mismatch (unless --fresh) and on a rerun that
+ * would replace hand-checked claims. With --resume, drops issues that already have a non-retryable row.
+ */
+export function selectPlan(disk: ShadowFile | undefined, cli: { seed: string; resume: boolean; fresh: boolean }, plan: Planned[]): { plan: Planned[]; skipped: number[] } {
+  if (cli.fresh) return { plan, skipped: [] };
+  assertSameSeed(disk, cli.seed);
+  const done = new Set((disk?.issues ?? []).filter((i) => cli.resume && !RETRYABLE.has(i.status)).map((i) => i.number));
+  const todo = plan.filter((p) => !done.has(p.input.number as number));
+  assertNoVerdictLoss(disk, todo.map((p) => p.input.number as number));
+  return { plan: todo, skipped: plan.filter((p) => done.has(p.input.number as number)).map((p) => p.input.number as number) };
+}
+
+/** Moves the existing results file aside; returns the archive path. */
+export function archiveResults(file: string = RESULTS_FILE, now: Date = new Date()): string | null {
+  if (!existsSync(file)) return null;
+  const to = join(dirname(file), `shadow-otari.${now.toISOString().replace(/[:.]/g, "-")}.json`);
+  renameSync(file, to);
+  return to;
 }
 
 function realPorts(): ShadowPorts {
@@ -90,10 +128,11 @@ async function main() {
   const cli = parseCli(process.argv.slice(2));
   const snap = await loadSnapshot();
   const open = snap.issues.filter((i) => isOpen(i.state));
+  const known = new Set(snap.issues.map((i) => i.number));
   const exclude = loadBenign().flatMap((c) => (c.number ? [c.number] : []));
   const picked = chooseSample(open, cli, exclude);
   const sample = [...picked.newest, ...picked.random];
-  const plan = planShadow(sample);
+  const fullPlan = planShadow(sample);
 
   if (cli.dryRun) {
     console.log(`[dry-run] ${open.length} open issues in the snapshot${snap.snapshotAt ? ` (taken ${snap.snapshotAt.toISOString()})` : ""}; ${exclude.length} eval issues excluded; seed ${cli.seed}`);
@@ -106,26 +145,32 @@ async function main() {
       show("newest open", picked.newest);
       show("random open", picked.random);
     }
-    const d = dryRun("porter", plan);
-    console.log(formatDryRun("porter", "shadow", d));
+    const sel = selectPlan(cli.fresh ? undefined : readShadowFile(), cli, fullPlan);
+    if (cli.resume) console.log(`--resume would skip ${sel.skipped.length} issue(s) already done: ${sel.skipped.join(", ") || "-"}`);
+    console.log(formatDryRun("porter", "shadow", dryRun("porter", sel.plan)));
     return;
   }
 
-  mkdirSync(join(__dirname, "..", "results"), { recursive: true });
-  const previous: ShadowFile | undefined = existsSync(RESULTS_FILE) ? (JSON.parse(readFileSync(RESULTS_FILE, "utf8")) as ShadowFile) : undefined;
-  const order = sample.map((i) => i.number);
-  const sampledAt = new Date();
-  const write = (fresh: ShadowIssue[]) => {
-    const merged = mergeShadow(previous?.issues ?? [], fresh, order);
-    const file = buildShadowFile({ sampledAt, seed: cli.seed, sample: cli.ids ? merged.length : sample.length, snapshotAt: snap.snapshotAt, issues: merged });
-    writeFileSync(RESULTS_FILE, `${JSON.stringify(file, null, 2)}\n`);
-  };
-  // Fail before any spend if a rerun would discard a hand-checked verdict.
-  mergeShadow(previous?.issues ?? [], plan.map((p) => ({ number: p.input.number as number }) as ShadowIssue), order);
-
-  const out = await runShadow(plan, { maxUsd: cli.maxUsd }, realPorts(), (l) => console.log(l), write);
-  write(out.issues);
-  console.log(`wrote ${RESULTS_FILE} (spent $${out.spentUsd.toFixed(4)}${out.stopped ? `; stopped: ${out.stopped.reason}, ${out.stopped.remaining.length} issues not run` : ""})`);
+  mkdirSync(RESULTS_DIR, { recursive: true });
+  // All checks happen before the lock, the archive and any spend.
+  const { plan, skipped } = selectPlan(readShadowFile(), cli, fullPlan);
+  acquireLock();
+  try {
+    if (cli.fresh) {
+      const archived = archiveResults();
+      if (archived) console.log(`archived the previous results to ${archived}`);
+    }
+    if (skipped.length > 0) console.log(`resume: skipping ${skipped.length} finished issue(s)`);
+    const sampledBy = { seed: cli.seed, mode: cli.ids ? ("ids" as const) : ("sample" as const), at: new Date().toISOString() };
+    const run = { sampledAt: new Date(), seed: cli.seed, sample: cli.ids ? 0 : sample.length, snapshotAt: snap.snapshotAt, order: sample.map((i) => i.number) };
+    const out = await runShadow(plan, { maxUsd: cli.maxUsd, known, sampledBy }, realPorts(), (l) => console.log(l), (fresh) => {
+      writeMerged(RESULTS_FILE, fresh, run);
+    });
+    writeMerged(RESULTS_FILE, out.issues, run);
+    console.log(`wrote ${RESULTS_FILE} (spent $${out.spentUsd.toFixed(4)}${out.stopped ? `; stopped: ${out.stopped.reason}, ${out.stopped.remaining.length} issues not run` : ""})`);
+  } finally {
+    releaseLock();
+  }
 }
 
 if (process.argv[1]?.replace(/\\/g, "/").endsWith("scripts/shadow.ts")) {

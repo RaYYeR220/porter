@@ -1,7 +1,19 @@
+import { mkdtempSync, readdirSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { planShadow, runShadow } from "../../scripts/shadow-core";
 import type { ShadowPorts } from "../../scripts/shadow-core";
 import {
+  acquireLock,
+  assertSameSeed,
+  LOCK_STALE_MS,
+  lockHeld,
+  mergeShadowFile,
+  readShadowFile,
+  releaseLock,
+  writeJsonAtomic,
+  writeMerged,
   applyVerdict,
   buildShadowFile,
   parseVerdict,
@@ -10,7 +22,7 @@ import {
   shadowEndUserId,
   summarizeShadow,
 } from "../../lib/shadow";
-import type { ShadowFile, SnapshotIssue } from "../../lib/shadow";
+import type { ShadowFile, ShadowIssue, SnapshotIssue } from "../../lib/shadow";
 import type { IssueInput } from "../../lib/agent/pipeline";
 
 const mk = (n: number, over: Partial<SnapshotIssue> = {}): SnapshotIssue => ({
@@ -93,11 +105,11 @@ describe("runShadow", () => {
     const p = ports(triage, (n) => (n === 1 ? "held_guardrail" : "answered"));
     const r = await runShadow(plan, {}, p);
     const file = buildShadowFile({ sampledAt: new Date("2026-11-08T00:00:00Z"), seed: "s", sample: 3, snapshotAt: "2026-11-07T10:00:00Z", issues: r.issues });
-    expect(Object.keys(file)).toEqual(["sampledAt", "seed", "sample", "snapshotAt", "issues", "totals"]);
+    expect(Object.keys(file)).toEqual(["sampledAt", "seed", "sample", "addedIds", "snapshotAt", "issues", "totals"]);
     expect(Object.keys(file.issues[0]).sort()).toEqual(
-      ["costUsd", "duplicates", "fixed_in", "kind", "labels", "latencyMs", "missing_info", "number", "runId", "status", "summary", "title", "url"],
+      ["costUsd", "duplicates", "fixed_in", "kind", "labels", "latencyMs", "missing_info", "number", "runId", "sampledBy", "status", "summary", "title", "url"],
     );
-    expect(file.issues[1].duplicates).toEqual([{ number: 1, title: "Issue 1", why: "same", verified: null }]);
+    expect(file.issues[1].duplicates).toEqual([{ number: 1, title: "Issue 1", why: "same", inSnapshot: true, verified: null }]);
     expect(file.issues[2].fixed_in).toEqual({ version: "v1.2", evidence_url: "https://x/y", verified: null });
     expect(file.issues[1].url).toBe("https://github.com/mozilla-ai/otari/issues/2");
     expect(file.issues[0].latencyMs).toBe(25);
@@ -205,24 +217,17 @@ describe("releaseEvidence", () => {
 describe("shadow CLI helpers", () => {
   it("parses flags and rejects bad ones", async () => {
     const { parseCli } = await import("../../scripts/shadow");
-    expect(parseCli([])).toEqual({ dryRun: false, maxUsd: undefined, sample: 40, seed: "porter-shadow-v1", ids: undefined });
+    expect(parseCli([])).toEqual({ dryRun: false, maxUsd: undefined, sample: 40, seed: "porter-shadow-v1", ids: undefined, resume: false, fresh: false });
     expect(parseCli(["--dry-run", "--max-usd", "1.5", "--sample", "10", "--ids", "3,4"])).toMatchObject({ dryRun: true, maxUsd: 1.5, sample: 10, ids: [3, 4] });
     expect(() => parseCli(["--max-usd", "0"])).toThrow();
+    expect(() => parseCli(["--resume", "--fresh"])).toThrow(/contradict/);
+    expect(parseCli(["--resume"]).resume).toBe(true);
     expect(() => parseCli(["--ids", "a"])).toThrow();
   });
   it("--ids must name open issues", async () => {
     const { chooseSample } = await import("../../scripts/shadow");
     expect(chooseSample(open, { sample: 40, seed: "s", ids: [5, 2] }, []).newest.map((i) => i.number)).toEqual([5, 2]);
     expect(() => chooseSample(open, { sample: 40, seed: "s", ids: [999] }, [])).toThrow(/not open/);
-  });
-  it("a rerun keeps other rows and refuses to discard a verdict", async () => {
-    const { mergeShadow } = await import("../../scripts/shadow");
-    const r = await runShadow(planShadow([mk(1), mk(2)]), {}, ports(() => ({ summary: "s", kind: "bug", fixed_in: { version: "1", evidence_url: "u" } })));
-    const merged = mergeShadow(r.issues, [{ ...r.issues[0], summary: "new" }], [1, 2]);
-    expect(merged.map((i) => i.number)).toEqual([1, 2]);
-    expect(merged[0].summary).toBe("new");
-    const checked = applyVerdict(buildShadowFile({ sampledAt: new Date(), seed: "s", sample: 2, snapshotAt: null, issues: r.issues }), parseVerdict("1:fixed:true"));
-    expect(() => mergeShadow(checked.issues, [r.issues[0]], [1, 2])).toThrow(/hand-checked/);
   });
   it("verify output shows both issues and release text, and the checked count", async () => {
     const { renderClaims } = await import("../../scripts/shadow-verify");
@@ -238,5 +243,118 @@ describe("shadow CLI helpers", () => {
     expect(text).toContain("cites #2 [v1.1.0]: - Fix streaming budget crash (#2)");
     expect(text).toContain("--set 2:dup=1:true|false");
     expect(text).toContain("0 of 2 claims checked by hand");
+  });
+});
+
+describe("fix round 1", () => {
+  const tmp = () => mkdtempSync(join(tmpdir(), "shadow-test-"));
+  const t = (seed = "s", mode: "sample" | "ids" = "sample") => ({ seed, mode, at: "2026-11-08T00:00:00Z" });
+  const trg = (n: number) => ({
+    summary: "s",
+    kind: "bug",
+    duplicates: n === 2 ? [{ number: 1, title: "a", why: "w" }, { number: 777, title: "ghost", why: "w" }] : [],
+    fixed_in: n === 3 ? { version: "1.2", evidence_url: "u" } : null,
+  });
+  const runWith = async (nums: number[], seed = "s", mode: "sample" | "ids" = "sample"): Promise<ShadowIssue[]> =>
+    (await runShadow(planShadow(nums.map((n) => mk(n))), { known: new Set(open.map((i) => i.number)), sampledBy: t(seed, mode) }, ports(trg))).issues;
+  const meta = (order: number[], seed = "s") => ({ sampledAt: new Date("2026-11-08T00:00:00Z"), seed, sample: 3, snapshotAt: null, order });
+
+  it("flags dangling duplicate claims, keeps them out of precision, refuses true on them", async () => {
+    const issues = await runWith([2]);
+    expect(issues[0].duplicates.map((d) => d.inSnapshot)).toEqual([true, false]);
+    const f = buildShadowFile({ sampledAt: new Date(), seed: "s", sample: 1, snapshotAt: null, issues });
+    expect(summarizeShadow(f)).toMatchObject({ duplicatesClaimed: 2, dangling: 1, claims: 1 });
+    expect(() => applyVerdict(f, parseVerdict("2:dup=777:true"))).toThrow(/not in the snapshot/);
+    const g = applyVerdict(f, parseVerdict("2:dup:true"));
+    expect(g.issues[0].duplicates.map((d) => d.verified)).toEqual([true, null]);
+    expect(summarizeShadow(g)).toMatchObject({ checked: 1, precision: 1, dangling: 1 });
+    const h = applyVerdict(f, parseVerdict("2:dup=777:false"));
+    expect(h.issues[0].duplicates[1].verified).toBe(false);
+    expect(summarizeShadow(h).checked).toBe(0);
+  });
+
+  it("refuses to mix seeds and keeps the original header; ids mode lists added ids", async () => {
+    const f1 = mergeShadowFile(undefined, await runWith([1, 2, 3]), meta([1, 2, 3]));
+    expect(() => mergeShadowFile(f1, [], meta([4], "other"))).toThrow(/--fresh/);
+    expect(() => assertSameSeed(f1, "other")).toThrow(/--fresh/);
+    const ids = await runWith([9], "s", "ids");
+    const f2 = mergeShadowFile(f1, ids, { ...meta([9]), sample: 0, sampledAt: new Date("2030-01-01") });
+    expect(f2.sample).toBe(3);
+    expect(f2.sampledAt).toBe(f1.sampledAt);
+    expect(f2.addedIds).toEqual([9]);
+    expect(f2.issues.map((i) => i.number)).toEqual([9, 1, 2, 3]);
+    expect(f2.issues.find((i) => i.number === 9)!.sampledBy.mode).toBe("ids");
+  });
+
+  it("selectPlan: seed mismatch throws unless fresh; resume skips done rows, retries failed/refused", async () => {
+    const { selectPlan } = await import("../../scripts/shadow");
+    const rows = await runWith([1, 2, 3]);
+    rows[1] = { ...rows[1], status: "failed" };
+    rows[2] = { ...rows[2], status: "refused_funds" };
+    const disk = mergeShadowFile(undefined, rows, meta([1, 2, 3]));
+    const plan = planShadow([mk(1), mk(2), mk(3), mk(4)]);
+    expect(() => selectPlan(disk, { seed: "x", resume: false, fresh: false }, plan)).toThrow(/--fresh/);
+    expect(selectPlan(disk, { seed: "x", resume: false, fresh: true }, plan).plan).toHaveLength(4);
+    const r = selectPlan(disk, { seed: "s", resume: true, fresh: false }, plan);
+    expect(r.skipped).toEqual([1]);
+    expect(r.plan.map((p) => p.input.number)).toEqual([2, 3, 4]);
+  });
+
+  it("selectPlan refuses to rerun a hand-checked issue without --resume", async () => {
+    const { selectPlan } = await import("../../scripts/shadow");
+    const disk = applyVerdict(mergeShadowFile(undefined, await runWith([3]), meta([3])), parseVerdict("3:fixed:true"));
+    expect(() => selectPlan(disk, { seed: "s", resume: false, fresh: false }, planShadow([mk(3)]))).toThrow(/hand-checked/);
+    expect(selectPlan(disk, { seed: "s", resume: true, fresh: false }, planShadow([mk(3)])).plan).toHaveLength(0);
+  });
+
+  it("writeMerged re-reads the file so a verdict recorded mid-run survives the next write", async () => {
+    const path = join(tmp(), "shadow-otari.json");
+    const a = await runWith([3]);
+    const b = await runWith([4]);
+    writeMerged(path, a, meta([3, 4]));
+    writeJsonAtomic(path, applyVerdict(readShadowFile(path)!, parseVerdict("3:fixed:true")));
+    const again = writeMerged(path, [...a, ...b], meta([3, 4]));
+    expect(again.issues[0].fixed_in?.verified).toBe(true);
+    expect(JSON.parse(readFileSync(path, "utf8")).issues[0].fixed_in.verified).toBe(true);
+    expect(again.issues.map((i) => i.number)).toEqual([3, 4]);
+  });
+
+  it("--fresh archives the old file under a timestamped name", async () => {
+    const { archiveResults } = await import("../../scripts/shadow");
+    const dir = tmp();
+    const path = join(dir, "shadow-otari.json");
+    writeJsonAtomic(path, { a: 1 });
+    const to = archiveResults(path, new Date("2026-11-08T01:02:03.000Z"));
+    expect(to).toBe(join(dir, "shadow-otari.2026-11-08T01-02-03-000Z.json"));
+    expect(readdirSync(dir)).toEqual(["shadow-otari.2026-11-08T01-02-03-000Z.json"]);
+    expect(archiveResults(path)).toBeNull();
+  });
+
+  it("atomic write leaves no temp file", () => {
+    const dir = tmp();
+    const path = join(dir, "x.json");
+    writeJsonAtomic(path, { a: 1 });
+    writeJsonAtomic(path, { a: 2 });
+    expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({ a: 2 });
+    expect(readdirSync(dir)).toEqual(["x.json"]);
+  });
+
+  it("lock: second acquire fails, stale lock is taken over, verify refuses to write while held", async () => {
+    const dir = tmp();
+    const lock = join(dir, ".shadow.lock");
+    const now = Date.now();
+    acquireLock(lock, now);
+    expect(() => acquireLock(lock, now + 1000)).toThrow(/holds/);
+    const { recordVerdicts } = await import("../../scripts/shadow-verify");
+    const path = join(dir, "shadow-otari.json");
+    writeMerged(path, await runWith([3]), meta([3]));
+    expect(() => recordVerdicts(["3:fixed:true"], path, lock)).toThrow(/shadow run is writing/);
+    expect(readShadowFile(path)!.issues[0].fixed_in?.verified).toBeNull();
+    releaseLock(lock);
+    expect(recordVerdicts(["3:fixed:true"], path, lock).issues[0].fixed_in?.verified).toBe(true);
+    acquireLock(lock, now - LOCK_STALE_MS - 1000);
+    expect(lockHeld(lock, now)).toBeNull();
+    acquireLock(lock, now);
+    expect(lockHeld(lock, now)?.pid).toBe(process.pid);
   });
 });

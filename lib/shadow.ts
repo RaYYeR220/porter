@@ -1,4 +1,12 @@
 import { createHash } from "node:crypto";
+import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+
+/** Run from the repo root (pnpm scripts do). */
+export const RESULTS_DIR = join(process.cwd(), "results");
+export const RESULTS_FILE = join(RESULTS_DIR, "shadow-otari.json");
+export const LOCK_FILE = join(RESULTS_DIR, ".shadow.lock");
+export const LOCK_STALE_MS = 2 * 60 * 60_000;
 
 /**
  * Pure helpers for the shadow run over a real tracker: sampling, the results file, human verdicts,
@@ -57,14 +65,24 @@ export function sampleIssues(open: SnapshotIssue[], o: SampleOptions): { newest:
   return { newest, random };
 }
 
-export type DuplicateClaim = { number: number; title: string; why: string; verified: boolean | null };
+export type DuplicateClaim = {
+  number: number;
+  title: string;
+  why: string;
+  /** False when the claimed duplicate is not an issue in the snapshot: it cannot be checked and never counts toward precision. */
+  inSnapshot: boolean;
+  verified: boolean | null;
+};
 export type FixedClaim = { version: string; evidence_url: string; verified: boolean | null };
+
+export type SampledBy = { seed: string; mode: "sample" | "ids"; at: string };
 
 export type ShadowIssue = {
   number: number;
   title: string;
   url: string;
   runId: string;
+  sampledBy: SampledBy;
   status: string;
   kind: string | null;
   summary: string | null;
@@ -89,7 +107,9 @@ export type ShadowTotals = {
 export type ShadowFile = {
   sampledAt: string;
   seed: string;
+  /** Size of the seeded sample; 0 for a file started by --ids. Issues added with --ids are listed in addedIds, not counted here. */
   sample: number;
+  addedIds: number[];
   snapshotAt: string | null;
   issues: ShadowIssue[];
   totals: ShadowTotals;
@@ -99,8 +119,9 @@ export const issueUrl = (n: number) => `https://github.com/${SHADOW_REPO}/issues
 
 /** The triage JSON stored on a run, read defensively (held and failed runs have none). */
 export function shadowIssueFrom(
-  base: { number: number; title: string; runId: string; status: string; costUsd: number; latencyMs: number },
+  base: { number: number; title: string; runId: string; sampledBy: SampledBy; status: string; costUsd: number; latencyMs: number },
   triage: unknown,
+  known: (n: number) => boolean = () => true,
 ): ShadowIssue {
   const t = (triage && typeof triage === "object" ? triage : {}) as Record<string, unknown>;
   const strs = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
@@ -113,7 +134,13 @@ export function shadowIssueFrom(
     summary: typeof t.summary === "string" ? t.summary : null,
     duplicates: dups
       .filter((d) => typeof d.number === "number" && d.number !== base.number)
-      .map((d) => ({ number: d.number as number, title: String(d.title ?? ""), why: String(d.why ?? ""), verified: null })),
+      .map((d) => ({
+        number: d.number as number,
+        title: String(d.title ?? ""),
+        why: String(d.why ?? ""),
+        inSnapshot: known(d.number as number),
+        verified: null,
+      })),
     fixed_in: fx && typeof fx.version === "string" ? { version: fx.version, evidence_url: String(fx.evidence_url ?? ""), verified: null } : null,
     missing_info: strs(t.missing_info),
     labels: strs(t.labels),
@@ -144,10 +171,116 @@ export function buildShadowFile(o: {
     sampledAt: o.sampledAt.toISOString(),
     seed: o.seed,
     sample: o.sample,
+    addedIds: o.issues.filter((i) => i.sampledBy.mode === "ids").map((i) => i.number).sort((a, b) => a - b),
     snapshotAt: o.snapshotAt ? new Date(o.snapshotAt).toISOString() : null,
     issues: o.issues,
     totals: totalsOf(o.issues),
   };
+}
+
+const hasVerdict = (i: ShadowIssue) => i.duplicates.some((d) => d.verified !== null) || (i.fixed_in?.verified ?? null) !== null;
+
+/** Same-seed check, before any spend. A different seed means a different sample: the caller must pass --fresh. */
+export function assertSameSeed(disk: ShadowFile | undefined, seed: string): void {
+  if (disk && disk.seed !== seed) {
+    throw new Error(`results/shadow-otari.json was sampled with seed "${disk.seed}", not "${seed}"; rerun with the same seed or pass --fresh (archives the old file)`);
+  }
+}
+
+/** Rows of `fresh` replace rows with the same number; verdicts already on disk for claims that still exist are kept. */
+function carryVerdicts(old: ShadowIssue | undefined, row: ShadowIssue): ShadowIssue {
+  if (!old) return row;
+  return {
+    ...row,
+    duplicates: row.duplicates.map((d) => {
+      const o = old.duplicates.find((x) => x.number === d.number);
+      return o && o.verified !== null ? { ...d, verified: o.verified } : d;
+    }),
+    fixed_in:
+      row.fixed_in && old.fixed_in && old.fixed_in.verified !== null && old.fixed_in.version === row.fixed_in.version
+        ? { ...row.fixed_in, verified: old.fixed_in.verified }
+        : row.fixed_in,
+  };
+}
+
+/**
+ * The file as it should be after a write: the on-disk file (re-read by the caller each time) plus `fresh` rows.
+ * Never discards a verdict on disk. Throws on a seed mismatch. Header fields of an existing file are kept
+ * (sampledAt, sample, snapshotAt); the first writer sets them.
+ */
+export function mergeShadowFile(
+  disk: ShadowFile | undefined,
+  fresh: ShadowIssue[],
+  run: { sampledAt: Date; seed: string; sample: number; snapshotAt: Date | string | null; order: number[] },
+): ShadowFile {
+  assertSameSeed(disk, run.seed);
+  const byNumber = new Map((disk?.issues ?? []).map((i) => [i.number, i]));
+  for (const f of fresh) byNumber.set(f.number, carryVerdicts(byNumber.get(f.number), f));
+  const rank = new Map(run.order.map((n, i) => [n, i]));
+  const issues = [...byNumber.values()].sort((a, b) => (rank.get(a.number) ?? 1e9) - (rank.get(b.number) ?? 1e9) || a.number - b.number);
+  const base = buildShadowFile({
+    sampledAt: disk ? new Date(disk.sampledAt) : run.sampledAt,
+    seed: run.seed,
+    sample: disk ? disk.sample : run.sample,
+    snapshotAt: disk ? disk.snapshotAt : run.snapshotAt,
+    issues,
+  });
+  return base;
+}
+
+/** Refuses (before any spend) to rerun an issue whose claims a human has already judged. */
+export function assertNoVerdictLoss(disk: ShadowFile | undefined, numbers: number[]): void {
+  const hit = (disk?.issues ?? []).find((i) => numbers.includes(i.number) && hasVerdict(i));
+  if (hit) throw new Error(`#${hit.number} already has a hand-checked verdict; rerunning would replace its claims (use --resume, or move results/shadow-otari.json aside)`);
+}
+
+/** Retryable statuses: nothing was served for them. Everything else is terminal and is not re-billed by --resume. */
+export const RETRYABLE = new Set(["failed", "refused_funds", "refused_budget"]);
+
+export function readShadowFile(path = RESULTS_FILE): ShadowFile | undefined {
+  return existsSync(path) ? (JSON.parse(readFileSync(path, "utf8")) as ShadowFile) : undefined;
+}
+
+/** Temp file in the same directory, then rename: a reader or a crash never sees half a file. */
+export function writeJsonAtomic(path: string, data: unknown): void {
+  const tmp = `${path}.${process.pid}.tmp`;
+  writeFileSync(tmp, `${JSON.stringify(data, null, 2)}\n`);
+  renameSync(tmp, path);
+}
+
+/** Re-reads the file, merges, writes atomically. Verdicts recorded by shadow:verify in between survive. */
+export function writeMerged(
+  path: string,
+  fresh: ShadowIssue[],
+  run: { sampledAt: Date; seed: string; sample: number; snapshotAt: Date | string | null; order: number[] },
+): ShadowFile {
+  const merged = mergeShadowFile(readShadowFile(path), fresh, run);
+  writeJsonAtomic(path, merged);
+  return merged;
+}
+
+type Lock = { pid: number; at: string };
+
+/** Lock held by a live-looking run: present and younger than LOCK_STALE_MS. */
+export function lockHeld(path = LOCK_FILE, now = Date.now()): Lock | null {
+  if (!existsSync(path)) return null;
+  try {
+    const l = JSON.parse(readFileSync(path, "utf8")) as Lock;
+    return now - new Date(l.at).getTime() < LOCK_STALE_MS ? l : null;
+  } catch {
+    return null;
+  }
+}
+
+export function acquireLock(path = LOCK_FILE, now = Date.now()): void {
+  const held = lockHeld(path, now);
+  if (held) throw new Error(`another shadow run holds ${path} (pid ${held.pid}, since ${held.at}); stale after 2 h`);
+  rmSync(path, { force: true });
+  writeFileSync(path, JSON.stringify({ pid: process.pid, at: new Date(now).toISOString() } satisfies Lock), { flag: "wx" });
+}
+
+export function releaseLock(path = LOCK_FILE): void {
+  rmSync(path, { force: true });
 }
 
 export type Verdict = {
@@ -177,8 +310,14 @@ export function applyVerdict(file: ShadowFile, v: Verdict): ShadowFile {
     if (!issue.fixed_in) throw new Error(`issue #${v.issue} has no fixed_in claim`);
     next = { ...issue, fixed_in: { ...issue.fixed_in, verified: v.value } };
   } else {
-    const hits = issue.duplicates.filter((d) => v.target === undefined || d.number === v.target);
-    if (hits.length === 0) throw new Error(`issue #${v.issue} has no duplicate claim${v.target ? ` for #${v.target}` : ""}`);
+    const named = issue.duplicates.filter((d) => v.target === undefined || d.number === v.target);
+    if (named.length === 0) throw new Error(`issue #${v.issue} has no duplicate claim${v.target ? ` for #${v.target}` : ""}`);
+    // A claim pointing outside the snapshot cannot be confirmed: "true" is refused, "false" is allowed.
+    const hits = v.value ? named.filter((d) => d.inSnapshot) : named;
+    if (v.value && v.target !== undefined && hits.length === 0) {
+      throw new Error(`#${v.target} is not in the snapshot: the claim on #${v.issue} cannot be marked true (mark it false)`);
+    }
+    if (hits.length === 0) throw new Error(`every duplicate claim on #${v.issue} points outside the snapshot: cannot be marked true`);
     next = { ...issue, duplicates: issue.duplicates.map((d) => (hits.includes(d) ? { ...d, verified: v.value } : d)) };
   }
   return { ...file, issues: file.issues.map((x, i) => (i === idx ? next : x)) };
@@ -186,7 +325,10 @@ export function applyVerdict(file: ShadowFile, v: Verdict): ShadowFile {
 
 export type ShadowSummary = ShadowTotals & {
   issues: number;
+  /** Claims that can be checked (duplicates inside the snapshot, plus fixed_in). */
   claims: number;
+  /** Duplicate claims pointing at a number not in the snapshot; reported apart, never in precision. */
+  dangling: number;
   checked: number;
   correct: number;
   /** correct / checked over claims a human checked; null until one is checked. Unverified claims never count. */
@@ -198,15 +340,17 @@ export type ShadowSummary = ShadowTotals & {
 export function summarizeShadow(file: ShadowFile): ShadowSummary {
   const t = totalsOf(file.issues);
   const verdicts: Array<boolean | null> = file.issues.flatMap((i) => [
-    ...i.duplicates.map((d) => d.verified),
+    ...i.duplicates.filter((d) => d.inSnapshot !== false).map((d) => d.verified),
     ...(i.fixed_in ? [i.fixed_in.verified] : []),
   ]);
+  const dangling = file.issues.reduce((s, i) => s + i.duplicates.filter((d) => d.inSnapshot === false).length, 0);
   const checkedList = verdicts.filter((v): v is boolean => v === true || v === false);
   const correct = checkedList.filter(Boolean).length;
   return {
     ...t,
     issues: file.issues.length,
     claims: verdicts.length,
+    dangling,
     checked: checkedList.length,
     correct,
     precision: checkedList.length > 0 ? correct / checkedList.length : null,

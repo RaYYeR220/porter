@@ -2,7 +2,7 @@ import type { IssueInput, RunOutcome } from "../lib/agent/pipeline";
 import { estimateCase, fmtUsd } from "../eval/estimate";
 import type { Planned } from "../eval/harness";
 import { SHADOW_REPO, shadowEndUserId, shadowIssueFrom } from "../lib/shadow";
-import type { ShadowIssue, SnapshotIssue } from "../lib/shadow";
+import type { SampledBy, ShadowIssue, SnapshotIssue } from "../lib/shadow";
 
 /** Ports for the shadow run; real ones live in scripts/shadow.ts, tests use fakes. */
 export interface ShadowPorts {
@@ -42,12 +42,13 @@ export type ShadowRunResult = {
  */
 export async function runShadow(
   plan: Planned[],
-  opts: { maxUsd?: number },
+  opts: { maxUsd?: number; /** issue numbers in the snapshot, for flagging dangling duplicate claims */ known?: Set<number>; sampledBy?: SampledBy },
   ports: ShadowPorts,
   log: (line: string) => void = () => undefined,
   onIssue: (issues: ShadowIssue[]) => void | Promise<void> = () => undefined,
 ): Promise<ShadowRunResult> {
   const clock = ports.clock ?? Date.now;
+  const sampledBy = opts.sampledBy ?? { seed: "", mode: "sample" as const, at: new Date(0).toISOString() };
   const issues: ShadowIssue[] = [];
   let spent = 0;
   const rest = (from: number) => plan.slice(from).map((p) => p.input.number as number);
@@ -66,8 +67,9 @@ export async function runShadow(
     const stored = await ports.load(outcome.runId);
     spent += stored.costUsd;
     const issue = shadowIssueFrom(
-      { number: p.input.number as number, title: p.input.title, runId: outcome.runId, status: stored.status, costUsd: stored.costUsd, latencyMs },
+      { number: p.input.number as number, title: p.input.title, runId: outcome.runId, sampledBy, status: stored.status, costUsd: stored.costUsd, latencyMs },
       stored.triage,
+      opts.known ? (n) => opts.known!.has(n) : undefined,
     );
     issues.push(issue);
     await onIssue(issues);

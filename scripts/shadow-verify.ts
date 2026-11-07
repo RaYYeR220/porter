@@ -7,11 +7,9 @@
  * Judge each claim against the issues themselves (and, for fixed_in, the release it cites), then record it.
  * The README and report only ever show precision over claims with a recorded verdict.
  */
-import { readFileSync, writeFileSync } from "node:fs";
 import { parseArgs } from "node:util";
-import { applyVerdict, firstLine, parseVerdict, releaseEvidence, summarizeShadow } from "../lib/shadow";
+import { applyVerdict, firstLine, lockHeld, LOCK_FILE, parseVerdict, readShadowFile, releaseEvidence, RESULTS_FILE, summarizeShadow, writeJsonAtomic } from "../lib/shadow";
 import type { ReleaseRow, ShadowFile, SnapshotIssue } from "../lib/shadow";
-import { RESULTS_FILE } from "./shadow";
 import { loadSnapshot } from "./shadow-db";
 
 const mark = (v: boolean | null) => (v === null ? "unchecked" : v ? "VERIFIED" : "WRONG");
@@ -24,7 +22,7 @@ export function renderClaims(file: ShadowFile, issues: Map<number, SnapshotIssue
   };
   for (const it of file.issues) {
     for (const d of it.duplicates) {
-      out.push(`DUPLICATE [${mark(d.verified)}]  #${it.number} -> #${d.number}`);
+      out.push(`DUPLICATE [${mark(d.verified)}]  #${it.number} -> #${d.number}${d.inSnapshot === false ? "  (DANGLING: not in the snapshot, cannot be marked true)" : ""}`);
       out.push(`  this:   ${line(it.number)}`);
       out.push(`  other:  ${line(d.number)}`);
       out.push(`  model says: ${d.why}`);
@@ -49,14 +47,23 @@ export function renderClaims(file: ShadowFile, issues: Map<number, SnapshotIssue
   return out.join("\n");
 }
 
+
+/** Records verdicts into the results file. Refuses while a shadow run holds the lock; the write is atomic. */
+export function recordVerdicts(args: string[], path = RESULTS_FILE, lock = LOCK_FILE): ShadowFile {
+  let file = readShadowFile(path);
+  if (!file) throw new Error("results/shadow-otari.json does not exist yet");
+  if (args.length === 0) return file;
+  const held = lockHeld(lock);
+  if (held) throw new Error(`a shadow run is writing the results file (pid ${held.pid}, since ${held.at}); record verdicts after it finishes`);
+  for (const arg of args) file = applyVerdict(file, parseVerdict(arg));
+  writeJsonAtomic(path, file);
+  return file;
+}
+
 async function main() {
   const { values } = parseArgs({ args: process.argv.slice(2), options: { set: { type: "string", multiple: true } } });
-  let file = JSON.parse(readFileSync(RESULTS_FILE, "utf8")) as ShadowFile;
-  if (values.set && values.set.length > 0) {
-    for (const arg of values.set) file = applyVerdict(file, parseVerdict(arg));
-    writeFileSync(RESULTS_FILE, `${JSON.stringify(file, null, 2)}\n`);
-    console.log(`recorded ${values.set.length} verdict(s)`);
-  }
+  const file = recordVerdicts(values.set ?? []);
+  if (values.set && values.set.length > 0) console.log(`recorded ${values.set.length} verdict(s)`);
   const snap = await loadSnapshot();
   console.log(renderClaims(file, new Map(snap.issues.map((i) => [i.number, i])), snap.releases));
 }
