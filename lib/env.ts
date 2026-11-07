@@ -56,6 +56,35 @@ export function getMcpServerId(arm: Arm): string | null {
   return nonEmpty(arm === "porter" ? process.env.OTARI_MCP_SERVER_ID : process.env.OTARI_MCP_SERVER_ID_BASELINE);
 }
 
+/** Narrow env for GitHub intake: webhook secret and the App slug (bot identity). */
+export function getGithubEnv(): { webhookSecret: string; slug: string } {
+  const webhookSecret = nonEmpty(process.env.GITHUB_WEBHOOK_SECRET);
+  const slug = nonEmpty(process.env.GITHUB_APP_SLUG);
+  if (!webhookSecret || !slug) {
+    const missing = [!webhookSecret && "GITHUB_WEBHOOK_SECRET", !slug && "GITHUB_APP_SLUG"].filter(Boolean);
+    throw new Error(`Missing or invalid environment variables: ${missing.join(", ")}`);
+  }
+  return { webhookSecret, slug };
+}
+
+/** Maintainer-key Otari settings, for executing approved proposals. */
+export function getMaintainerEnv(): { baseUrl: string; apiKey: string; mcpServerId: string | null } {
+  const apiKey = nonEmpty(process.env.OTARI_KEY_MAINTAINER);
+  if (!apiKey) throw new Error("Missing or invalid environment variables: OTARI_KEY_MAINTAINER");
+  return {
+    baseUrl: nonEmpty(process.env.OTARI_BASE_URL) ?? schema.shape.OTARI_BASE_URL.parse(undefined),
+    apiKey,
+    mcpServerId: getMcpServerId("porter"),
+  };
+}
+
+/** Budget id the `/porter upgrade` command moves an author to. */
+export function getRegularBudgetId(): string {
+  const id = nonEmpty(process.env.OTARI_BUDGET_REGULAR_ID);
+  if (!id) throw new Error("Missing or invalid environment variables: OTARI_BUDGET_REGULAR_ID");
+  return id;
+}
+
 /** Narrow env for the agent pipeline: the arm's service key (desk strangers or baseline) and its MCP server. */
 export function getAgentEnv(arm: Arm): { baseUrl: string; apiKey: string; mcpServerId: string | null } {
   const name = arm === "porter" ? "OTARI_KEY_STRANGERS" : "OTARI_KEY_BASELINE";
