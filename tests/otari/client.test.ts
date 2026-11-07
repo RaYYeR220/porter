@@ -139,6 +139,15 @@ describe("endUsers and usage", () => {
     expect((await client.endUsers.get("gh:octocat"))?.external_id).toBe("gh:octocat");
   });
 
+  it("lists end users with a clamped limit", async () => {
+    const { calls, fetchImpl } = fake([json([{ external_id: "gh:a", blocked: false, spend: 1, budget_id: "b" }]), json({ oops: true })]);
+    const client = createOtariClient({ apiKey: "k", baseUrl: BASE, fetchImpl });
+    const rows = await client.endUsers.list(5000);
+    expect(calls[0].url).toBe(`${BASE}/end-users?limit=1000`);
+    expect(rows).toHaveLength(1);
+    expect(await client.endUsers.list(10)).toEqual([]);
+  });
+
   it("puts and patches with the right method and body", async () => {
     const u = { external_id: "gh:a", blocked: true, spend: 0, budget_id: "b" };
     const { calls, fetchImpl } = fake([json(u, { status: 201 }), json(u)]);

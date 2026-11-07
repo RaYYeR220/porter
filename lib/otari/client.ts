@@ -166,6 +166,12 @@ export function createOtariClient(cfg: { apiKey: string; baseUrl?: string; fetch
         const list = await getJson<EndUser[]>(endUserPath(externalId));
         return Array.isArray(list) && list.length > 0 ? list[0] : null;
       },
+      /** Lists end users (newest API order); the API caps `limit` at 1000. */
+      async list(limit = 200): Promise<EndUser[]> {
+        const n = Math.min(1000, Math.max(1, Math.floor(limit)));
+        const list = await getJson<EndUser[]>(`/end-users?limit=${n}`);
+        return Array.isArray(list) ? list : [];
+      },
       put: (externalId: string, budgetId: string) => writeEndUser("PUT", externalId, { budget_id: budgetId }),
       patch: (externalId: string, patch: { blocked?: boolean; budget_id?: string }) =>
         writeEndUser("PATCH", externalId, patch),
