@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 /** Run from the repo root (pnpm scripts do). */
 export const RESULTS_DIR = join(process.cwd(), "results");
@@ -181,9 +181,13 @@ export function buildShadowFile(o: {
 const hasVerdict = (i: ShadowIssue) => i.duplicates.some((d) => d.verified !== null) || (i.fixed_in?.verified ?? null) !== null;
 
 /** Same-seed check, before any spend. A different seed means a different sample: the caller must pass --fresh. */
-export function assertSameSeed(disk: ShadowFile | undefined, seed: string): void {
+export function assertSameSeed(disk: ShadowFile | undefined, seed: string, sample?: number): void {
   if (disk && disk.seed !== seed) {
     throw new Error(`results/shadow-otari.json was sampled with seed "${disk.seed}", not "${seed}"; rerun with the same seed or pass --fresh (archives the old file)`);
+  }
+  // `sample` is given for non-ids runs only; a different size is a different sample under the same seed.
+  if (disk && sample !== undefined && sample > 0 && disk.sample > 0 && disk.sample !== sample) {
+    throw new Error(`results/shadow-otari.json holds a sample of ${disk.sample}, this run asks for ${sample}; use the same --sample or pass --fresh (archives the old file)`);
   }
 }
 
@@ -213,7 +217,7 @@ export function mergeShadowFile(
   fresh: ShadowIssue[],
   run: { sampledAt: Date; seed: string; sample: number; snapshotAt: Date | string | null; order: number[] },
 ): ShadowFile {
-  assertSameSeed(disk, run.seed);
+  assertSameSeed(disk, run.seed, run.sample);
   const byNumber = new Map((disk?.issues ?? []).map((i) => [i.number, i]));
   for (const f of fresh) byNumber.set(f.number, carryVerdicts(byNumber.get(f.number), f));
   const rank = new Map(run.order.map((n, i) => [n, i]));
@@ -221,7 +225,7 @@ export function mergeShadowFile(
   const base = buildShadowFile({
     sampledAt: disk ? new Date(disk.sampledAt) : run.sampledAt,
     seed: run.seed,
-    sample: disk ? disk.sample : run.sample,
+    sample: disk && disk.sample > 0 ? disk.sample : run.sample,
     snapshotAt: disk ? disk.snapshotAt : run.snapshotAt,
     issues,
   });
@@ -241,22 +245,90 @@ export function readShadowFile(path = RESULTS_FILE): ShadowFile | undefined {
   return existsSync(path) ? (JSON.parse(readFileSync(path, "utf8")) as ShadowFile) : undefined;
 }
 
-/** Temp file in the same directory, then rename: a reader or a crash never sees half a file. */
-export function writeJsonAtomic(path: string, data: unknown): void {
+/** The file operations the atomic write uses; tests inject failing ones. */
+export type FileIo = {
+  writeFileSync: (path: string, data: string) => void;
+  renameSync: (from: string, to: string) => void;
+  rmSync: (path: string, o: { force: true }) => void;
+  sleepSync: (ms: number) => void;
+};
+export const realIo: FileIo = {
+  writeFileSync: (p, d) => writeFileSync(p, d),
+  renameSync,
+  rmSync,
+  sleepSync: (ms) => void Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms),
+};
+/** Windows holds a file open for editors, antivirus and indexers: rename onto it fails briefly with one of these. */
+const BUSY = new Set(["EPERM", "EBUSY", "EACCES"]);
+export const RENAME_BACKOFF_MS = [50, 100, 200, 400, 800];
+
+/**
+ * Temp file in the same directory, then rename: a reader or a crash never sees half a file. The rename is
+ * retried on EPERM/EBUSY/EACCES (5 retries, backoff 50..800 ms); on final failure the temp file is removed and the error thrown.
+ */
+export function writeJsonAtomic(path: string, data: unknown, io: FileIo = realIo): void {
   const tmp = `${path}.${process.pid}.tmp`;
-  writeFileSync(tmp, `${JSON.stringify(data, null, 2)}\n`);
-  renameSync(tmp, path);
+  io.writeFileSync(tmp, `${JSON.stringify(data, null, 2)}\n`);
+  try {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        io.renameSync(tmp, path);
+        return;
+      } catch (e) {
+        const code = (e as NodeJS.ErrnoException).code ?? "";
+        if (!BUSY.has(code) || attempt >= RENAME_BACKOFF_MS.length) throw e;
+        io.sleepSync(RENAME_BACKOFF_MS[attempt]);
+      }
+    }
+  } catch (e) {
+    io.rmSync(tmp, { force: true });
+    throw e;
+  }
 }
 
-/** Re-reads the file, merges, writes atomically. Verdicts recorded by shadow:verify in between survive. */
-export function writeMerged(
-  path: string,
-  fresh: ShadowIssue[],
-  run: { sampledAt: Date; seed: string; sample: number; snapshotAt: Date | string | null; order: number[] },
-): ShadowFile {
+type RunMeta = { sampledAt: Date; seed: string; sample: number; snapshotAt: Date | string | null; order: number[] };
+
+const pendingName = (path: string, runId: string) => join(dirname(path), `shadow-otari.pending-${runId}.json`);
+const PENDING_RE = /^shadow-otari\.pending-.+\.json$/;
+
+/**
+ * Re-reads the file, merges, writes atomically. Verdicts recorded by shadow:verify in between survive.
+ * If the write still fails after the retries, the new rows go to a sidecar (results/shadow-otari.pending-<runId>.json)
+ * so a billed issue is not lost, the runId is logged, and the error is thrown. mergePending picks the sidecar up next run.
+ */
+export function writeMerged(path: string, fresh: ShadowIssue[], run: RunMeta, io: FileIo = realIo): ShadowFile {
   const merged = mergeShadowFile(readShadowFile(path), fresh, run);
-  writeJsonAtomic(path, merged);
+  try {
+    writeJsonAtomic(path, merged, io);
+  } catch (e) {
+    const last = fresh[fresh.length - 1];
+    if (last) {
+      try {
+        io.writeFileSync(pendingName(path, last.runId), `${JSON.stringify({ seed: run.seed, rows: fresh }, null, 2)}\n`);
+        console.error(`could not write ${path}; rows saved to ${pendingName(path, last.runId)} (last runId ${last.runId})`);
+      } catch {
+        console.error(`could not write ${path} or its sidecar; last billed runId ${last.runId}, issue #${last.number}`);
+      }
+    }
+    throw e;
+  }
   return merged;
+}
+
+/** Merges sidecars left by a failed write into the results file, then deletes them. Returns how many rows were recovered. */
+export function mergePending(path: string, run: RunMeta, io: FileIo = realIo): number {
+  const dir = dirname(path);
+  if (!existsSync(dir)) return 0;
+  let rows = 0;
+  for (const name of readdirSync(dir).filter((n) => PENDING_RE.test(n))) {
+    const file = join(dir, name);
+    const side = JSON.parse(readFileSync(file, "utf8")) as { seed: string; rows: ShadowIssue[] };
+    if (side.seed !== run.seed) throw new Error(`${name} holds rows sampled with seed "${side.seed}", not "${run.seed}"; rerun with that seed, or delete the sidecar`);
+    writeMerged(path, side.rows, run, io);
+    rmSync(file, { force: true });
+    rows += side.rows.length;
+  }
+  return rows;
 }
 
 type Lock = { pid: number; at: string };
@@ -274,9 +346,16 @@ export function lockHeld(path = LOCK_FILE, now = Date.now()): Lock | null {
 
 export function acquireLock(path = LOCK_FILE, now = Date.now()): void {
   const held = lockHeld(path, now);
-  if (held) throw new Error(`another shadow run holds ${path} (pid ${held.pid}, since ${held.at}); stale after 2 h`);
+  if (held) throw new Error(`another shadow run holds ${path} (pid ${held.pid}, since ${held.at}); ${LOCK_HINT}`);
   rmSync(path, { force: true });
   writeFileSync(path, JSON.stringify({ pid: process.pid, at: new Date(now).toISOString() } satisfies Lock), { flag: "wx" });
+}
+
+export const LOCK_HINT = "if no run is active, delete results/.shadow.lock (it also goes stale after 2 h)";
+
+/** Moves the lock's timestamp forward; called after every successful write so a long run never looks stale. */
+export function refreshLock(path = LOCK_FILE, now = Date.now()): void {
+  writeFileSync(path, JSON.stringify({ pid: process.pid, at: new Date(now).toISOString() } satisfies Lock));
 }
 
 export function releaseLock(path = LOCK_FILE): void {

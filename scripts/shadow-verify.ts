@@ -8,7 +8,7 @@
  * The README and report only ever show precision over claims with a recorded verdict.
  */
 import { parseArgs } from "node:util";
-import { applyVerdict, firstLine, lockHeld, LOCK_FILE, parseVerdict, readShadowFile, releaseEvidence, RESULTS_FILE, summarizeShadow, writeJsonAtomic } from "../lib/shadow";
+import { applyVerdict, firstLine, lockHeld, LOCK_FILE, LOCK_HINT, parseVerdict, readShadowFile, releaseEvidence, RESULTS_FILE, summarizeShadow, writeJsonAtomic } from "../lib/shadow";
 import type { ReleaseRow, ShadowFile, SnapshotIssue } from "../lib/shadow";
 import { loadSnapshot } from "./shadow-db";
 
@@ -54,7 +54,7 @@ export function recordVerdicts(args: string[], path = RESULTS_FILE, lock = LOCK_
   if (!file) throw new Error("results/shadow-otari.json does not exist yet");
   if (args.length === 0) return file;
   const held = lockHeld(lock);
-  if (held) throw new Error(`a shadow run is writing the results file (pid ${held.pid}, since ${held.at}); record verdicts after it finishes`);
+  if (held) throw new Error(`a shadow run is writing the results file (pid ${held.pid}, since ${held.at}); record verdicts after it finishes; ${LOCK_HINT}`);
   for (const arg of args) file = applyVerdict(file, parseVerdict(arg));
   writeJsonAtomic(path, file);
   return file;

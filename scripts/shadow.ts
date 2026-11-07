@@ -33,6 +33,8 @@ import {
   acquireLock,
   assertNoVerdictLoss,
   assertSameSeed,
+  mergePending,
+  refreshLock,
   DEFAULT_SAMPLE,
   DEFAULT_SEED,
   readShadowFile,
@@ -94,9 +96,9 @@ export function chooseSample(open: SnapshotIssue[], cli: { sample: number; seed:
  * Every pre-spend check, and the plan left to run. Throws on a seed mismatch (unless --fresh) and on a rerun that
  * would replace hand-checked claims. With --resume, drops issues that already have a non-retryable row.
  */
-export function selectPlan(disk: ShadowFile | undefined, cli: { seed: string; resume: boolean; fresh: boolean }, plan: Planned[]): { plan: Planned[]; skipped: number[] } {
+export function selectPlan(disk: ShadowFile | undefined, cli: { seed: string; resume: boolean; fresh: boolean; /** size of the seeded sample; omitted for --ids runs */ sample?: number }, plan: Planned[]): { plan: Planned[]; skipped: number[] } {
   if (cli.fresh) return { plan, skipped: [] };
-  assertSameSeed(disk, cli.seed);
+  assertSameSeed(disk, cli.seed, cli.sample);
   const done = new Set((disk?.issues ?? []).filter((i) => cli.resume && !RETRYABLE.has(i.status)).map((i) => i.number));
   const todo = plan.filter((p) => !done.has(p.input.number as number));
   assertNoVerdictLoss(disk, todo.map((p) => p.input.number as number));
@@ -145,32 +147,56 @@ async function main() {
       show("newest open", picked.newest);
       show("random open", picked.random);
     }
-    const sel = selectPlan(cli.fresh ? undefined : readShadowFile(), cli, fullPlan);
+    const sel = selectPlan(cli.fresh ? undefined : readShadowFile(), { ...cli, sample: cli.ids ? undefined : sample.length }, fullPlan);
     if (cli.resume) console.log(`--resume would skip ${sel.skipped.length} issue(s) already done: ${sel.skipped.join(", ") || "-"}`);
     console.log(formatDryRun("porter", "shadow", dryRun("porter", sel.plan)));
     return;
   }
 
   mkdirSync(RESULTS_DIR, { recursive: true });
-  // All checks happen before the lock, the archive and any spend.
-  const { plan, skipped } = selectPlan(readShadowFile(), cli, fullPlan);
+  // The lock comes first: sidecars from a failed write are merged before the checks, so --resume sees them.
   acquireLock();
+  const uninstall = installSignalHandlers(process, releaseLock);
   try {
+    const sampledBy = { seed: cli.seed, mode: cli.ids ? ("ids" as const) : ("sample" as const), at: new Date().toISOString() };
+    const run = { sampledAt: new Date(), seed: cli.seed, sample: cli.ids ? 0 : sample.length, snapshotAt: snap.snapshotAt, order: sample.map((i) => i.number) };
+    if (!cli.fresh) {
+      const recovered = mergePending(RESULTS_FILE, run);
+      if (recovered > 0) console.log(`recovered ${recovered} row(s) from pending sidecars`);
+    }
+    // Every check happens before the archive and any spend.
+    const { plan, skipped } = selectPlan(readShadowFile(), { ...cli, sample: cli.ids ? undefined : sample.length }, fullPlan);
     if (cli.fresh) {
       const archived = archiveResults();
       if (archived) console.log(`archived the previous results to ${archived}`);
     }
     if (skipped.length > 0) console.log(`resume: skipping ${skipped.length} finished issue(s)`);
-    const sampledBy = { seed: cli.seed, mode: cli.ids ? ("ids" as const) : ("sample" as const), at: new Date().toISOString() };
-    const run = { sampledAt: new Date(), seed: cli.seed, sample: cli.ids ? 0 : sample.length, snapshotAt: snap.snapshotAt, order: sample.map((i) => i.number) };
     const out = await runShadow(plan, { maxUsd: cli.maxUsd, known, sampledBy }, realPorts(), (l) => console.log(l), (fresh) => {
       writeMerged(RESULTS_FILE, fresh, run);
+      refreshLock();
     });
     writeMerged(RESULTS_FILE, out.issues, run);
     console.log(`wrote ${RESULTS_FILE} (spent $${out.spentUsd.toFixed(4)}${out.stopped ? `; stopped: ${out.stopped.reason}, ${out.stopped.remaining.length} issues not run` : ""})`);
   } finally {
+    uninstall();
     releaseLock();
   }
+}
+
+/** Ctrl-C and SIGTERM release the lock before exiting (130 / 143), so shadow:verify is not blocked afterwards. */
+export function installSignalHandlers(
+  proc: { on(sig: string, h: () => void): unknown; off(sig: string, h: () => void): unknown; exit(code: number): unknown },
+  release: () => void,
+): () => void {
+  const handlers = ([["SIGINT", 130], ["SIGTERM", 143]] as const).map(([sig, code]) => {
+    const h = () => {
+      release();
+      proc.exit(code);
+    };
+    proc.on(sig, h);
+    return [sig, h] as const;
+  });
+  return () => handlers.forEach(([sig, h]) => proc.off(sig, h));
 }
 
 if (process.argv[1]?.replace(/\\/g, "/").endsWith("scripts/shadow.ts")) {

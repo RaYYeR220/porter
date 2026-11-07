@@ -1,4 +1,5 @@
 import { mkdtempSync, readdirSync, readFileSync } from "node:fs";
+import { EventEmitter } from "node:events";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -6,6 +7,9 @@ import { planShadow, runShadow } from "../../scripts/shadow-core";
 import type { ShadowPorts } from "../../scripts/shadow-core";
 import {
   acquireLock,
+  mergePending,
+  realIo,
+  refreshLock,
   assertSameSeed,
   LOCK_STALE_MS,
   lockHeld,
@@ -356,5 +360,115 @@ describe("fix round 1", () => {
     expect(lockHeld(lock, now)).toBeNull();
     acquireLock(lock, now);
     expect(lockHeld(lock, now)?.pid).toBe(process.pid);
+  });
+});
+
+describe("fix round 2", () => {
+  const tmp = () => mkdtempSync(join(tmpdir(), "shadow-test2-"));
+  const meta = (order: number[], sample = 3) => ({ sampledAt: new Date("2026-11-08T00:00:00Z"), seed: "s", sample, snapshotAt: null, order });
+  const row = async (n: number): Promise<ShadowIssue> =>
+    (await runShadow(planShadow([mk(n)]), { sampledBy: { seed: "s", mode: "sample", at: "x" } }, ports(() => ({ summary: "s", kind: "bug" })))).issues[0];
+  const err = (code: string) => Object.assign(new Error(code), { code });
+  /** Real fs, but renameSync fails `n` times with `code` first; sleeps are recorded, not slept. */
+  const flaky = (n: number, code = "EPERM") => {
+    const sleeps: number[] = [];
+    let left = n;
+    const io = {
+      ...realIo,
+      renameSync: (a: string, b: string) => {
+        if (left-- > 0) throw err(code);
+        realIo.renameSync(a, b);
+      },
+      sleepSync: (ms: number) => void sleeps.push(ms),
+    };
+    return { io, sleeps };
+  };
+
+  it("retries the rename on EPERM with 50/100/200 ms backoff and then succeeds", () => {
+    const dir = tmp();
+    const { io, sleeps } = flaky(3);
+    writeJsonAtomic(join(dir, "x.json"), { a: 1 }, io);
+    expect(sleeps).toEqual([50, 100, 200]);
+    expect(readdirSync(dir)).toEqual(["x.json"]);
+    const b = flaky(2, "EBUSY");
+    writeJsonAtomic(join(dir, "y.json"), { a: 1 }, b.io);
+    expect(b.sleeps).toEqual([50, 100]);
+  });
+
+  it("gives up after five retries, removes the temp file and throws", () => {
+    const dir = tmp();
+    const { io, sleeps } = flaky(99);
+    expect(() => writeJsonAtomic(join(dir, "x.json"), { a: 1 }, io)).toThrow("EPERM");
+    expect(sleeps).toEqual([50, 100, 200, 400, 800]);
+    expect(readdirSync(dir)).toEqual([]);
+  });
+
+  it("does not retry other errors", () => {
+    const { io, sleeps } = flaky(99, "ENOENT");
+    expect(() => writeJsonAtomic(join(tmp(), "x.json"), {}, io)).toThrow("ENOENT");
+    expect(sleeps).toEqual([]);
+  });
+
+  it("a failed write leaves a pending sidecar; the next run merges it and deletes it", async () => {
+    const dir = tmp();
+    const path = join(dir, "shadow-otari.json");
+    writeMerged(path, [await row(1)], meta([1, 2, 3]));
+    const billed = await row(2);
+    const { io } = flaky(99);
+    expect(() => writeMerged(path, [billed], meta([1, 2, 3]), io)).toThrow("EPERM");
+    expect(readdirSync(dir).sort()).toEqual([`shadow-otari.pending-${billed.runId}.json`, "shadow-otari.json"].sort());
+    expect(readShadowFile(path)!.issues.map((i) => i.number)).toEqual([1]);
+    expect(mergePending(path, meta([1, 2, 3]))).toBe(1);
+    expect(readShadowFile(path)!.issues.map((i) => i.number)).toEqual([1, 2]);
+    expect(readdirSync(dir)).toEqual(["shadow-otari.json"]);
+    expect(mergePending(path, meta([1, 2, 3]))).toBe(0);
+  });
+
+  it("a sidecar from another seed is not merged silently", async () => {
+    const dir = tmp();
+    const path = join(dir, "shadow-otari.json");
+    const billed = await row(2);
+    expect(() => writeMerged(path, [billed], meta([2]), flaky(99).io)).toThrow();
+    expect(() => mergePending(path, { ...meta([2]), seed: "other" })).toThrow(/seed/);
+    expect(readdirSync(dir)).toHaveLength(1);
+  });
+
+  it("refreshLock moves the timestamp so a long run is not stale; both lock errors say how to recover", async () => {
+    const dir = tmp();
+    const lock = join(dir, ".shadow.lock");
+    const t0 = Date.now() - LOCK_STALE_MS + 1000;
+    acquireLock(lock, t0);
+    expect(lockHeld(lock, Date.now() + 5000)).toBeNull();
+    refreshLock(lock, Date.now());
+    expect(lockHeld(lock, Date.now() + 5000)).not.toBeNull();
+    expect(() => acquireLock(lock)).toThrow(/delete results\/\.shadow\.lock/);
+    const { recordVerdicts } = await import("../../scripts/shadow-verify");
+    const path = join(dir, "shadow-otari.json");
+    writeMerged(path, [await row(3)], meta([3]));
+    expect(() => recordVerdicts(["3:fixed:true"], path, lock)).toThrow(/delete results\/\.shadow\.lock/);
+  });
+
+  it("SIGINT and SIGTERM release the lock and exit 130 / 143; uninstall removes the handlers", async () => {
+    const { installSignalHandlers } = await import("../../scripts/shadow");
+    const ee = new EventEmitter();
+    const exits: number[] = [];
+    let released = 0;
+    const uninstall = installSignalHandlers(Object.assign(ee, { exit: ((c: number) => void exits.push(c)) as never }), () => released++);
+    ee.emit("SIGINT");
+    ee.emit("SIGTERM");
+    expect(exits).toEqual([130, 143]);
+    expect(released).toBe(2);
+    uninstall();
+    expect(ee.listenerCount("SIGINT") + ee.listenerCount("SIGTERM")).toBe(0);
+  });
+
+  it("a different --sample size under the same seed is refused unless --fresh; ids runs are exempt", async () => {
+    const { selectPlan } = await import("../../scripts/shadow");
+    const disk = mergeShadowFile(undefined, [await row(1)], meta([1], 40));
+    const plan = planShadow([mk(1)]);
+    expect(() => selectPlan(disk, { seed: "s", resume: true, fresh: false, sample: 10 }, plan)).toThrow(/sample of 40/);
+    expect(() => selectPlan(disk, { seed: "s", resume: true, fresh: false, sample: 40 }, plan)).not.toThrow();
+    expect(() => selectPlan(disk, { seed: "s", resume: true, fresh: false }, plan)).not.toThrow();
+    expect(selectPlan(disk, { seed: "s", resume: false, fresh: true, sample: 10 }, plan).plan).toHaveLength(1);
   });
 });
