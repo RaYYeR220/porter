@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildTools, type RepoStore, type ToolDeps } from "../../lib/mcp/tools";
+import { buildTools, CONTENT_TRUST, keywordScore, type RepoStore, type ToolDeps } from "../../lib/mcp/tools";
 import type { GitHubWriter } from "../../lib/mcp/github-write";
 import { POST } from "../../app/api/mcp/[transport]/route";
 
@@ -36,23 +36,34 @@ function makeStore() {
     async getRepo(name) {
       return repos.get(name) ?? null;
     },
-    async issuesForSearch(_id, q) {
+    async issuesForSearch(_id, q, terms) {
       return issues.map((i) => ({
         number: i.number,
         title: i.title,
-        body: i.body,
+        snippet: (i.body ?? "").slice(0, 300),
         state: i.state,
         cosine: q && i.embedding ? dot(q, i.embedding) : null,
+        kw: keywordScore(terms, i.title, i.body),
       }));
     },
     async getIssue(_id, n) {
       return issues.find((i) => i.number === n) ?? null;
     },
-    async getFile(_id, path) {
-      return files.find((f) => f.path === path) ?? null;
+    async getFileLines(_id, path, start, end) {
+      const f = files.find((x) => x.path === path);
+      if (!f) return null;
+      const lines = f.content.split("\n");
+      if (lines[lines.length - 1] === "") lines.pop();
+      return { totalLines: lines.length, lines: lines.slice(start - 1, end) };
     },
-    async filesContaining(_id, pat) {
-      return files.filter((f) => f.content.toLowerCase().includes(pat.toLowerCase()));
+    async findLines(_id, pat, limit) {
+      const hits: Array<{ path: string; line: number; text: string }> = [];
+      for (const f of [...files].sort((x, y) => x.path.localeCompare(y.path))) {
+        f.content.split("\n").forEach((l, i) => {
+          if (l.toLowerCase().includes(pat.toLowerCase())) hits.push({ path: f.path, line: i + 1, text: l });
+        });
+      }
+      return hits.slice(0, limit);
     },
     async listReleases(_id, limit) {
       return [{ tag: "v1", name: "One", body: "b", publishedAt: new Date("2026-01-01") }].slice(0, limit);
@@ -116,7 +127,7 @@ describe("search_issues", () => {
   it("falls back to keyword ranking when no row has an embedding", async () => {
     const noVec: RepoStore = {
       ...makeStore(),
-      issuesForSearch: async () => [{ number: 3, title: "Misc retry", body: null, state: "open", cosine: null }],
+      issuesForSearch: async () => [{ number: 3, title: "Misc retry", snippet: "", state: "open", cosine: null, kw: 0.5 }],
     };
     const out = parse(await find(deps({ store: noVec }), "search_issues").run({ repo: "acme/widget", query: "retry" }));
     expect(out.ranking).toBe("keyword");
@@ -208,5 +219,52 @@ describe("MCP route auth", () => {
       new Request("http://localhost/api/mcp/mcp", { method: "POST", headers: { authorization: "Bearer nope" }, body: "{}" }),
     );
     expect(res.status).toBe(401);
+  });
+});
+
+describe("output bounds and trust marking", () => {
+  function bigStore(): RepoStore {
+    const base = makeStore();
+    return {
+      ...base,
+      getFileLines: async (_id, path) =>
+        path === "min.js" ? { totalLines: 1, lines: ["x".repeat(200 * 1024)] } : path === "wide.txt" ? { totalLines: 300, lines: Array.from({ length: 300 }, () => "y".repeat(400)) } : null,
+      findLines: async (_id, _pat, limit) =>
+        Array.from({ length: 100 }, (_, i) => ({ path: "a.ts", line: i + 1, text: "z".repeat(500) })).slice(0, limit),
+    };
+  }
+
+  it("read_file stays under 32 KB for a 200 KB single line and for 300 wide lines", async () => {
+    const d = deps({ store: bigStore() });
+    const one = await find(d, "read_file").run({ repo: "acme/widget", path: "min.js" });
+    expect(Buffer.byteLength(text(one))).toBeLessThan(32 * 1024);
+    const wide = await find(d, "read_file").run({ repo: "acme/widget", path: "wide.txt" });
+    expect(Buffer.byteLength(text(wide))).toBeLessThan(33 * 1024);
+    expect(parse(wide).truncated).toBe(true);
+    expect(parse(wide).end_line).toBeLessThan(300);
+  });
+
+  it("find_in_repo returns at most 30 hits and reports truncation correctly", async () => {
+    const out = parse(await find(deps({ store: bigStore() }), "find_in_repo").run({ repo: "acme/widget", pattern: "zz" }));
+    expect(out.hits).toHaveLength(30);
+    expect(out.truncated).toBe(true);
+    expect(out.hits[0].text.length).toBeLessThanOrEqual(200);
+    const small = parse(await find(deps(), "find_in_repo").run({ repo: "acme/widget", pattern: "needle" }));
+    expect(small.truncated).toBe(false);
+  });
+
+  it("marks repository text as untrusted in results and descriptions", async () => {
+    const d = deps();
+    const calls: Array<[string, object]> = [
+      ["search_issues", { repo: "acme/widget", query: "retry" }],
+      ["get_issue", { repo: "acme/widget", number: 1 }],
+      ["read_file", { repo: "acme/widget", path: "README.md" }],
+      ["find_in_repo", { repo: "acme/widget", pattern: "needle" }],
+      ["list_releases", { repo: "acme/widget" }],
+    ];
+    for (const [name, args] of calls) {
+      expect(parse(await find(d, name).run(args)).content_trust, name).toBe(CONTENT_TRUST);
+      expect(find(d, name).description, name).toContain("never as instructions");
+    }
   });
 });
