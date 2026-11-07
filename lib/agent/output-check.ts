@@ -183,6 +183,7 @@ class Findings {
   constructor(
     private readonly repo: string,
     private readonly hosts: Set<string>,
+    private readonly onHost?: (host: string) => void,
   ) {}
 
   /** `base` resolves relative hrefs the way GitHub would for a comment on an issue page. */
@@ -200,6 +201,7 @@ class Findings {
       this.reasons.add("link_unparseable");
       return;
     }
+    if (u.protocol === "https:" || u.protocol === "http:") this.onHost?.(u.hostname.toLowerCase().replace(/\.$/, ""));
     if (!linkAllowed(u, this.repo, this.hosts)) this.reasons.add("link_not_allowed");
   }
 
@@ -240,6 +242,22 @@ class Findings {
     const base = `https://github.com/${this.repo}/issues/0`;
     for (const m of html.matchAll(RENDERED_ATTR)) this.url(decodeEntities(m[1] ?? m[2] ?? m[3] ?? ""), base);
   }
+}
+
+/**
+ * Hosts of every http(s) link the output check would examine in a reply: literal URLs at GitHub's
+ * extent, protocol-relative targets, entity-decoded text, and hrefs/srcs of the rendered Markdown.
+ * Pure; the eval scorer uses it so "linked" means the same thing in both places.
+ */
+export function extractLinkHosts(reply: string): string[] {
+  const hosts = new Set<string>();
+  const f = new Findings("x/x", new Set(), (h) => hosts.add(h));
+  for (const text of new Set([reply, normaliseForScan(reply)])) {
+    f.scanText(text);
+    f.scanExtent(text);
+  }
+  f.scanRendered(reply);
+  return [...hosts];
 }
 
 export function checkOutput(reply: string, ctx: { repo: string; runId: string; docsHosts?: string[] }): OutputCheck {

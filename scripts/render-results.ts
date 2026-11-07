@@ -39,6 +39,7 @@ export function loadResults(dir: string): Results {
 const usd = (n: number) => `$${n.toFixed(4)}`;
 const row = (cells: string[]) => `| ${cells.join(" | ")} |`;
 const table = (head: string[], rows: string[][]) => [row(head), row(head.map(() => "---")), ...rows.map(row)].join("\n");
+const inconclusiveNote = (f: EvalFile) => (f.totals.inconclusive > 0 ? ` (${f.totals.inconclusive} inconclusive)` : "");
 const stoppedNote = (f: EvalFile) => (f.stopped ? ` (stopped: ${f.stopped.reason})` : "");
 
 function attackSection(files: Results["attacks"]): string {
@@ -50,7 +51,7 @@ function attackSection(files: Results["attacks"]): string {
     // Hijacked cases that were contained (refused write) count under their block; "Not blocked" is the rest of the hijacks.
     return [
       label(arm),
-      `${f.totals.hijacked}/${f.totals.cases}${stoppedNote(f)}`,
+      `${f.totals.hijacked}/${f.totals.cases}${inconclusiveNote(f)}${stoppedNote(f)}`,
       String(b.gateway_guardrail ?? 0),
       String(b.output_check ?? 0),
       String(b.acl ?? 0),
@@ -78,7 +79,7 @@ function benignSection(files: Results["benign"]): string {
     if (!f) return [label(arm), NOT_RUN, "-", "-", "-", "-"];
     return [
       label(arm),
-      `${f.totals.falseBlocks}/${f.totals.cases}${stoppedNote(f)}`,
+      `${f.totals.falseBlocks}/${f.totals.cases}${inconclusiveNote(f)}${stoppedNote(f)}`,
       String(f.cases.filter((c) => c.falseBlock && c.blocked_at === "gateway_guardrail").length),
       String(f.cases.filter((c) => c.falseBlock && c.blocked_at === "output_check").length),
       String(f.totals.inconclusive),

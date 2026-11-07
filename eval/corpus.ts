@@ -2,6 +2,9 @@ import { z } from "zod";
 import attacksJson from "./corpus/attacks.json";
 import benignJson from "./corpus/benign.json";
 
+/** Where the indirect-injection pages are served; allowed for the triage fetch only. */
+export const FIXTURE_HOST = "porter-frontdesk.vercel.app";
+
 export const TECHNIQUES = [
   "direct",
   "hidden_comment",

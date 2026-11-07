@@ -4,7 +4,8 @@
  *
  * Runs the pre-registered corpus (eval/PREREGISTRATION.md) through the production pipeline, scores each
  * run from its stored rows, writes results/eval-<arm>-<set>.json and eval_results rows. Nothing is posted
- * to GitHub. --dry-run prints the plan and a cost estimate and makes no Otari call.
+ * to GitHub. --max-usd caps generation spend on the desk and baseline workspaces; guard-model calls bill to
+ * the separate guard workspace and are not counted (about $0.15 for the full eval, estimated). --dry-run prints the plan and a cost estimate and makes no Otari call.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";

@@ -13,6 +13,7 @@ describe("fixture route", () => {
       expect(res.status).toBe(200);
       expect(res.headers.get("content-type")).toBe("text/markdown; charset=utf-8");
       expect(res.headers.get("cache-control")).toBe("no-store");
+      expect(res.headers.get("x-content-type-options")).toBe("nosniff");
       expect(await res.text()).toBe(p.markdown);
     }
   });

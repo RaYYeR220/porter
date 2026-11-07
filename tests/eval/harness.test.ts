@@ -155,6 +155,13 @@ describe("dry run and estimates", () => {
     expect(estimateCase(shape, "porter").guardUsd).toBeGreaterThan(0);
     expect(estimateCase(shape, "baseline").guardUsd).toBe(0);
   });
+  it("the ceiling prices all six triage rounds", () => {
+    const e = estimateCase({ title: "t", body: "b" }, "porter");
+    const four = (4 * (1 + 700) + 3 * 1500) * 0.037 + 4 * 900 * 0.17;
+    const six = (6 * (1 + 700) + 5 * 1500) * 0.037 + 6 * 900 * 0.17;
+    expect((six - four) / 1e6).toBeGreaterThan(0);
+    expect(e.ceilingUsd).toBeGreaterThan(e.expectedUsd);
+  });
   it("a page case expects two fetches; the ceiling is never below the expectation", () => {
     const a = estimateCase({ title: "t", body: "b" }, "porter");
     const b = estimateCase({ title: "t", body: "b", hasPage: true }, "porter");

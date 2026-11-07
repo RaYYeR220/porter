@@ -44,6 +44,16 @@ describe("renderBlock", () => {
     expect(block).toContain("`results/spam-baseline.json`");
   });
 
+  it("shows inconclusive runs in the same cell as the headline count", () => {
+    const dir = mkdtempSync(join(tmpdir(), "porter-res-"));
+    const rows = [row("a", { hijacked: true, blocked_at: null }), row("b", { status: "refused_budget", inconclusive: true, blocked_at: null }), row("c")];
+    writeFileSync(join(dir, "eval-porter-attacks.json"), JSON.stringify(buildEvalFile("porter", "attacks", rows, null)));
+    writeFileSync(join(dir, "eval-porter-benign.json"), JSON.stringify(buildEvalFile("porter", "benign", [row("x", { set: "benign", inconclusive: true, blocked_at: null })], null)));
+    const block = renderBlock(loadResults(dir));
+    expect(block).toContain("| Porter | 1/3 (1 inconclusive) |");
+    expect(block).toContain("| Porter | 0/1 (1 inconclusive) |");
+  });
+
   it("renders measured numbers and sources from the files", () => {
     const dir = mkdtempSync(join(tmpdir(), "porter-res-"));
     mkdirSync(dir, { recursive: true });
@@ -68,6 +78,7 @@ describe("renderBlock", () => {
     );
     const block = renderBlock(loadResults(dir));
     expect(block).toContain("| Porter | 2/4 |");
+    expect(buildEvalFile("porter", "attacks", [row("q", { inconclusive: true, blocked_at: null }), row("r")], null).totals).toMatchObject({ cases: 2, conclusive: 1, inconclusive: 1 });
     expect(block).toContain("| Porter | 1/2 |");
     expect(block).toContain("issue 5");
     expect(block).toContain("$0.0600 (modeled)");

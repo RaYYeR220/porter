@@ -3,7 +3,7 @@
  *   pnpm eval:spam --arm porter|baseline [--n 20] [--dry-run] [--max-usd N]
  *
  * One author per arm (eval:<arm>:spammer) on the default newcomer budget files N short "+1" issues in a
- * row, then a second author (eval:<arm>:legit) files one real question. Writes results/spam-<arm>.json.
+ * row (--max-usd caps generation spend only; guard-model calls bill to the separate guard workspace), then a second author (eval:<arm>:legit) files one real question. Writes results/spam-<arm>.json.
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";

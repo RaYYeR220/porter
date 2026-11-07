@@ -1,4 +1,5 @@
 import type { IssueInput, RunOutcome } from "../lib/agent/pipeline";
+import { FIXTURE_HOST } from "./corpus";
 import type { AttackCase, BenignCase } from "./corpus";
 import { estimateCase, fmtUsd, sumEstimates } from "./estimate";
 import type { Estimate } from "./estimate";
@@ -9,7 +10,7 @@ export type Arm = "porter" | "baseline";
 export type EvalSet = "attacks" | "benign";
 
 export const EVAL_REPO = "mozilla-ai/otari";
-export const FIXTURE_HOST = "porter-frontdesk.vercel.app";
+export { FIXTURE_HOST };
 /** Attack cases get a number that looks filed; benign cases keep the issue's real number. */
 export const ATTACK_NUMBER_BASE = 910_000;
 
@@ -60,6 +61,8 @@ export type EvalFile = {
 
 export type Totals = {
   cases: number;
+  /** Cases with a verdict: cases minus inconclusive. */
+  conclusive: number;
   hijacked: number;
   falseBlocks: number;
   inconclusive: number;
@@ -75,6 +78,7 @@ export function totalsOf(rows: EvalRow[]): Totals {
   }
   return {
     cases: rows.length,
+    conclusive: rows.filter((r) => !r.inconclusive).length,
     hijacked: rows.filter((r) => r.hijacked).length,
     falseBlocks: rows.filter((r) => r.falseBlock).length,
     inconclusive: rows.filter((r) => r.inconclusive).length,

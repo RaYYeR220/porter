@@ -1,4 +1,4 @@
-import { ROLES } from "../lib/agent/roles";
+import { MAX_TOOL_ITERATIONS, ROLES } from "../lib/agent/roles";
 import type { Role } from "../lib/agent/roles";
 import { MAX_BODY_CHARS } from "../lib/agent/triage";
 
@@ -29,8 +29,11 @@ export const FEES = { fetch: 0.01, codeRun: 0.01 };
 /** Prompt overhead and tool-result tokens per triage round (documented assumptions, not measurements). */
 const SYSTEM_TOKENS = 700;
 const TOOL_RESULT_TOKENS = 1_500;
-/** Triage rounds priced: the tool loop allows 6; most issues need two or three tool calls. */
+/** Rounds priced for the expected figure (most issues need two or three tool calls); the ceiling prices all of max_tool_iterations. */
 const TRIAGE_ROUNDS = 4;
+const CEILING_ROUNDS = MAX_TOOL_ITERATIONS.triage;
+const triageUsd = (rounds: number, issueTokens: number) =>
+  usd(ROLE_MODEL.triage, rounds * (issueTokens + SYSTEM_TOKENS) + (rounds - 1) * TOOL_RESULT_TOKENS, rounds * ROLES.triage.maxTokens);
 const MAX_FETCHES = 2;
 
 const tokens = (chars: number) => Math.ceil(chars / 4);
@@ -51,15 +54,14 @@ const wantsRepro = (c: CaseShape) => /```\s*(python|py)\b/i.test(c.body);
 
 export function estimateCase(c: CaseShape, arm: "porter" | "baseline"): Estimate {
   const issueTokens = tokens(Math.min(c.body.length, MAX_BODY_CHARS) + c.title.length);
-  const triageIn = TRIAGE_ROUNDS * (issueTokens + SYSTEM_TOKENS) + (TRIAGE_ROUNDS - 1) * TOOL_RESULT_TOKENS;
-  const triage = usd(ROLE_MODEL.triage, triageIn, TRIAGE_ROUNDS * ROLES.triage.maxTokens);
+  const triage = triageUsd(TRIAGE_ROUNDS, issueTokens);
   const repro = usd(ROLE_MODEL.repro, issueTokens + SYSTEM_TOKENS, ROLES.repro.maxTokens);
   const review = usd(ROLE_MODEL.review, issueTokens + SYSTEM_TOKENS + 2 * TOOL_RESULT_TOKENS, ROLES.review.maxTokens);
 
   const expectedFetches = c.hasPage ? MAX_FETCHES : 1;
   const base = triage + review + (wantsRepro(c) ? repro + FEES.codeRun : 0);
   const expectedUsd = base + expectedFetches * FEES.fetch;
-  const ceilingUsd = triage + review + repro + FEES.codeRun + MAX_FETCHES * FEES.fetch;
+  const ceilingUsd = triageUsd(CEILING_ROUNDS, issueTokens) + review + repro + FEES.codeRun + MAX_FETCHES * FEES.fetch;
 
   // One input-only guard pass per gateway call (triage, repro, review): safeguard + llama-guard on the call's input.
   const calls = [issueTokens + SYSTEM_TOKENS, issueTokens + SYSTEM_TOKENS, issueTokens + SYSTEM_TOKENS + 2 * TOOL_RESULT_TOKENS];

@@ -16,10 +16,10 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   const { id } = await ctx.params;
   const markdown = PAGES.get(id);
   if (markdown === undefined) {
-    return new Response("not found", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } });
+    return new Response("not found", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
   }
   return new Response(markdown, {
     status: 200,
-    headers: { "Content-Type": "text/markdown; charset=utf-8", "Cache-Control": "no-store" },
+    headers: { "Content-Type": "text/markdown; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" },
   });
 }
