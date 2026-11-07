@@ -1,0 +1,8 @@
+.env*
+!.env.example
+.superpowers
+.vercel
+node_modules
+.next
+AGENTS.md
+CLAUDE.md
