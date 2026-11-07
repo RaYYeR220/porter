@@ -54,6 +54,10 @@ export type PipelineDeps = {
   mcpServerId?: string | null;
   /** The repository's docs/homepage hosts, when known: allowed for web fetch and reply links. */
   docsHosts?: string[];
+  /** Extra hosts for the triage web fetch only (eval fixtures); never allowed as reply links. */
+  extraFetchDomains?: string[];
+  /** Sent as `Otari-End-User-Budget` on every call of the run (eval end users on the regular budget). */
+  endUserBudget?: string;
 };
 
 /** Console review queue: one kv item per held run. */
@@ -153,6 +157,7 @@ class Run {
     private readonly otari: PipelineDeps["otari"],
     readonly rec: Recorder,
     readonly now: () => Date,
+    private readonly endUserBudget?: string,
   ) {}
 
   async step(role: string, s: Partial<StepRecord>): Promise<void> {
@@ -194,6 +199,7 @@ class Run {
         res = await this.otari.chat(body, {
           conversationId: `run-${this.id}`,
           tags: { app: "porter", role, arm: this.input.arm },
+          ...(this.endUserBudget ? { endUserBudget: this.endUserBudget } : {}),
           // Same key on the retry, so a request Otari already served is not billed twice.
           idempotencyKey: `run-${this.id}-${role}`,
           signal: AbortSignal.timeout(Math.min(STEP_TIMEOUT_MS[role], left)),
@@ -284,7 +290,7 @@ function buildProposals(input: IssueInput, triage: TriageResult, triageToolCalls
 
 type Driven = Settled & { triage: TriageResult | null; proposals: Proposal[] };
 
-async function drive(run: Run, opts: { mcpServerId: string | null; docsHosts: string[] }): Promise<Driven> {
+async function drive(run: Run, opts: { mcpServerId: string | null; docsHosts: string[]; extraFetchDomains: string[] }): Promise<Driven> {
   const { input } = run;
   let triage: TriageResult | null = null;
   const done = (s: Settled, proposals: Proposal[] = []): Driven => ({ ...s, triage, proposals });
@@ -358,11 +364,11 @@ export async function runIssue(input: IssueInput, deps: PipelineDeps): Promise<R
     return { runId, status: "failed", reply: null, proposals: [] };
   }
   const mcpServerId = deps.mcpServerId !== undefined ? deps.mcpServerId : getMcpServerId(input.arm);
-  const run = new Run(runId, input, deps.otari, rec, now);
+  const run = new Run(runId, input, deps.otari, rec, now, deps.endUserBudget);
 
   let result: Driven;
   try {
-    result = await drive(run, { mcpServerId, docsHosts: deps.docsHosts ?? [] });
+    result = await drive(run, { mcpServerId, docsHosts: deps.docsHosts ?? [], extraFetchDomains: deps.extraFetchDomains ?? [] });
     if (result.proposals.length > 0) await rec.addProposals(runId, result.proposals);
     await rec.finishRun(runId, {
       status: result.status,

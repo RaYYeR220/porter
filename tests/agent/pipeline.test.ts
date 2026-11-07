@@ -78,7 +78,7 @@ const reproOk = (toolCalls: unknown[] | null = REPRO_TOOL_CALLS) =>
   });
 const reviewOk = (r: object = REVIEW) => ok(JSON.stringify(r), {}, { costUsd: 0.0005, model: "z-ai/glm-5.3-flash" });
 
-function setup(script: Scripted[], over: Partial<IssueInput> = {}, deps: { mcpServerId?: string | null } = {}) {
+function setup(script: Scripted[], over: Partial<IssueInput> = {}, deps: { mcpServerId?: string | null; extraFetchDomains?: string[]; endUserBudget?: string } = {}) {
   const otari = scriptedOtari(script);
   const mem = memoryRecorder();
   const run = () =>
@@ -503,5 +503,44 @@ describe("runIssue: configuration and arms", () => {
     const recorder = { ...mem.recorder, addStep: async () => Promise.reject(new Error("db down")) };
     await expect(runIssue(INPUT, { otari: otari.otari, recorder, now: () => NOW, mcpServerId: "m" })).rejects.toThrow("db down");
     expect([...mem.runs.values()][0].status).toBe("failed");
+  });
+});
+
+describe("runIssue: eval deps", () => {
+  const FIXTURE = "porter-frontdesk.vercel.app";
+  const happy = () => [triageOk(), reproOk(), reviewOk()];
+  const fetchDomains = (body: { tools?: unknown }) =>
+    ((body.tools as Array<{ type: string; allowed_domains?: string[] }>).find((x) => x.type === "otari_web_fetch")?.allowed_domains ?? []);
+
+  it("without the deps, calls are production calls: no fixture host, no budget header", async () => {
+    const t = setup(happy());
+    await t.run();
+    for (const c of t.calls) expect(c.opts.endUserBudget).toBeUndefined();
+    expect(fetchDomains(t.calls[0].body)).not.toContain(FIXTURE);
+  });
+
+  it("extraFetchDomains widen the triage fetch only, never the review link allowlist", async () => {
+    const t = setup(happy(), {}, { extraFetchDomains: [FIXTURE] });
+    await t.run();
+    expect(fetchDomains(t.calls[0].body)).toContain(FIXTURE);
+    const review = t.calls.find((c) => c.opts.tags?.role === "review");
+    expect(systemMessage(review!.body)).not.toContain(FIXTURE);
+  });
+
+  it("a reply linking the fixture host is still held by the output check", async () => {
+    const t = setup(
+      [triageOk(), reproOk(), reviewOk({ reply: `See https://${FIXTURE}/fixtures/page/x for details.`, struck_claims: [] })],
+      {},
+      { extraFetchDomains: [FIXTURE] },
+    );
+    const out = await t.run();
+    expect(out.status).toBe("held_guardrail");
+  });
+
+  it("endUserBudget is sent on every call of the run", async () => {
+    const t = setup(happy(), {}, { endUserBudget: "budget-regular" });
+    await t.run();
+    expect(t.calls.length).toBeGreaterThan(1);
+    for (const c of t.calls) expect(c.opts.endUserBudget).toBe("budget-regular");
   });
 });

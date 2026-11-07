@@ -29,8 +29,13 @@ export function promptTitle(title: string): string {
   return untrusted(cut(title.replace(/[\s\x85]+/g, " ").trim(), MAX_PROMPT_TITLE_CHARS));
 }
 
-export function allowedFetchDomains(docsHosts: string[] = []): string[] {
-  return [...new Set([...FETCH_DOMAINS, ...docsHosts.map((h) => h.trim().toLowerCase()).filter(Boolean)])];
+/**
+ * Triage fetch allowlist. `extraFetchDomains` (eval fixtures) widen the fetch only: they are never
+ * passed to the reply or output-check link allowlists.
+ */
+export function allowedFetchDomains(docsHosts: string[] = [], extraFetchDomains: string[] = []): string[] {
+  const clean = (hosts: string[]) => hosts.map((h) => h.trim().toLowerCase()).filter(Boolean);
+  return [...new Set([...FETCH_DOMAINS, ...clean(docsHosts), ...clean(extraFetchDomains)])];
 }
 
 /** The issue as the user message: title, number, delimited body (cut to 12,000 chars with a notice). */
@@ -55,10 +60,15 @@ export function issueBlock(input: IssueInput, maxBody = MAX_BODY_CHARS): string 
   return lines.join("\n");
 }
 
-export function buildTriageMessages(input: IssueInput, runId: string, docsHosts: string[] = []): ChatMessage[] {
+export function buildTriageMessages(
+  input: IssueInput,
+  runId: string,
+  docsHosts: string[] = [],
+  extraFetchDomains: string[] = [],
+): ChatMessage[] {
   return placeRunMarker(
     [
-      { role: "system", content: triageSystem(input.repo, allowedFetchDomains(docsHosts)) },
+      { role: "system", content: triageSystem(input.repo, allowedFetchDomains(docsHosts, extraFetchDomains)) },
       { role: "user", content: issueBlock(input) },
     ],
     runId,
@@ -68,15 +78,15 @@ export function buildTriageMessages(input: IssueInput, runId: string, docsHosts:
 export function buildTriageRequest(
   input: IssueInput,
   runId: string,
-  opts: { mcpServerId: string | null; docsHosts?: string[] },
+  opts: { mcpServerId: string | null; docsHosts?: string[]; extraFetchDomains?: string[] },
 ): ChatBody {
   const body: ChatBody = {
     model: ROLES.triage.model,
-    messages: buildTriageMessages(input, runId, opts.docsHosts),
+    messages: buildTriageMessages(input, runId, opts.docsHosts, opts.extraFetchDomains),
     max_tokens: ROLES.triage.maxTokens,
     user: input.authorExternalId,
     max_tool_iterations: MAX_TOOL_ITERATIONS.triage,
-    tools: [{ type: "otari_web_fetch", max_uses: 2, allowed_domains: allowedFetchDomains(opts.docsHosts) }],
+    tools: [{ type: "otari_web_fetch", max_uses: 2, allowed_domains: allowedFetchDomains(opts.docsHosts, opts.extraFetchDomains) }],
     response_format: jsonSchemaFormat("triage", TRIAGE_JSON_SCHEMA),
   };
   if (opts.mcpServerId) body.mcp_server_ids = [opts.mcpServerId];
