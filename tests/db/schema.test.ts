@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { db } from "../../lib/db/client";
-import { issues, repos, runs } from "../../lib/db/schema";
+import { issues, proposals, repos, runs } from "../../lib/db/schema";
 import { toStoredEmbedding } from "../../lib/db/vector";
 
 const live = process.env.DB_LIVE === "1";
@@ -57,5 +57,17 @@ describe.skipIf(!live)("schema (live Neon)", () => {
     const row = { source: "github" as const, arm: "porter" as const, repo: fullName, issueNumber: 1, deliveryId, status: "queued" };
     await d.insert(runs).values(row);
     await expect(d.insert(runs).values(row)).rejects.toThrow();
+  });
+
+  it("rejects invalid enum values at the database level", async () => {
+    const d = db();
+    const [run] = await d.insert(runs).values({ source: "web", arm: "porter", repo: fullName, status: "queued", deliveryId }).onConflictDoNothing().returning();
+    const runId = run?.id ?? (await d.select().from(runs).where(eq(runs.deliveryId, deliveryId)))[0].id;
+    await expect(
+      d.insert(proposals).values({ runId, action: "add_labels", args: {}, status: "bogus" as never }),
+    ).rejects.toThrow();
+    await expect(
+      d.insert(runs).values({ source: "web", arm: "bogus" as never, repo: fullName, status: "queued" }),
+    ).rejects.toThrow();
   });
 });

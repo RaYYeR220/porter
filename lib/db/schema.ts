@@ -1,5 +1,7 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   doublePrecision,
   index,
   integer,
@@ -22,7 +24,7 @@ export const repos = pgTable("repos", {
   kind: text("kind", { enum: ["demo", "shadow"] }).notNull(),
   installationId: text("installation_id"),
   snapshotAt: ts("snapshot_at"),
-});
+}, (t) => [check("repos_kind_chk", sql`${t.kind} in ('demo','shadow')`)]);
 
 export const issues = pgTable(
   "issues",
@@ -84,7 +86,11 @@ export const runs = pgTable(
     createdAt: ts("created_at").notNull().defaultNow(),
     finishedAt: ts("finished_at"),
   },
-  (t) => [index("runs_repo_issue_idx").on(t.repo, t.issueNumber)],
+  (t) => [
+    index("runs_repo_issue_idx").on(t.repo, t.issueNumber),
+    check("runs_source_chk", sql`${t.source} in ('github','web','eval','shadow')`),
+    check("runs_arm_chk", sql`${t.arm} in ('porter','baseline')`),
+  ],
 );
 
 export const steps = pgTable(
@@ -134,7 +140,10 @@ export const proposals = pgTable("proposals", {
   execution: jsonb("execution"),
   createdAt: ts("created_at").notNull().defaultNow(),
   decidedAt: ts("decided_at"),
-});
+}, (t) => [
+  check("proposals_action_chk", sql`${t.action} in ('add_labels','close_as_duplicate')`),
+  check("proposals_status_chk", sql`${t.status} in ('pending','executed','rejected','failed')`),
+]);
 
 export const authors = pgTable("authors", {
   externalId: text("external_id").primaryKey(),
@@ -158,7 +167,7 @@ export const evalResults = pgTable("eval_results", {
   latencyMs: integer("latency_ms"),
   runId: uuid("run_id").references(() => runs.id, { onDelete: "set null" }),
   createdAt: ts("created_at").notNull().defaultNow(),
-});
+}, (t) => [check("eval_results_arm_chk", sql`${t.arm} in ('porter','baseline')`)]);
 
 export const kv = pgTable("kv", {
   key: text("key").primaryKey(),
