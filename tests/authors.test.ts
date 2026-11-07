@@ -24,7 +24,7 @@ function setup() {
     now: () => new Date(now),
     otari: {
       endUsers: {
-        get: async () => null,
+        get: async (id: string) => users.find((u) => u.external_id === id) ?? null,
         list: async () => {
           calls.list++;
           return users;
@@ -102,8 +102,26 @@ describe("authors", () => {
     expect(isActionableId("gh:a/b")).toBe(false);
   });
 
+  it("refuses unknown authors without calling PUT or PATCH", async () => {
+    const t = setup();
+    expect(await applyAuthorAction("gh:nobody", "upgrade", t.deps)).toBe("unknown_author");
+    expect(await applyAuthorAction("eval:case1", "block", t.deps)).toBe("unknown_author");
+    expect(t.calls.put).toHaveLength(0);
+    expect(t.calls.patch).toHaveLength(0);
+    expect(t.a.rows.size).toBe(0);
+  });
+
+  it("accepts an author known only to Otari and upserts the mirror row", async () => {
+    const t = setup();
+    expect(await applyAuthorAction("gh:octocat", "upgrade", t.deps)).toBe("ok");
+    expect(t.a.rows.get("gh:octocat")).toMatchObject({ budgetId: "bud-reg", spendUsd: 0.2 });
+    await applyAuthorAction("gh:octocat", "block", t.deps);
+    expect(t.a.rows.get("gh:octocat")).toMatchObject({ blocked: true, budgetId: "bud-reg" });
+  });
+
   it("upgrade/downgrade PUT budgets; block/unblock PATCH", async () => {
     const t = setup();
+    await getAuthors(t.deps);
     await applyAuthorAction("gh:octocat", "upgrade", t.deps);
     await applyAuthorAction("gh:octocat", "downgrade", t.deps);
     await applyAuthorAction("gh:octocat", "block", t.deps);
@@ -131,6 +149,15 @@ describe("POST /api/authors/:id", () => {
     expect(audit).toHaveLength(1);
     expect(audit[0][1].value).toMatchObject({ action: "block", target: "gh:octocat" });
     expect(JSON.stringify(audit)).not.toContain("203.0.113.5");
+  });
+
+  it("404 unknown_author for a well-formed id that does not exist", async () => {
+    const { t, post } = act();
+    const res = await post("gh%3Anobody", { action: "upgrade" });
+    expect(res.status).toBe(404);
+    expect((await res.json()).error).toBe("unknown_author");
+    expect(t.calls.put).toHaveLength(0);
+    expect([...t.m.keys()].some((k) => k.startsWith("author_action:"))).toBe(false);
   });
 
   it("400 for ids outside gh:/web: and for bad actions", async () => {

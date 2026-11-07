@@ -1,6 +1,6 @@
 import type { IssueInput } from "../agent/pipeline";
 import { fundsGate, type FundsDeps } from "../balance";
-import { clientIp, errorJson, internalError, ipHash, Limiter, rateLimited, webUserId } from "../api/common";
+import { errorJson, internalError, requestHash, Limiter, rateLimited, webUserId } from "../api/common";
 import { isPreset, presetIssues, type PresetIssue } from "./presets";
 
 export const TRY_PER_HOUR = 6;
@@ -17,7 +17,12 @@ export type TryDeps = {
   /** Creates the run row and returns its id. */
   startRun: (input: IssueInput) => Promise<string>;
   /** The actual pipeline run for an already-started row. */
-  runIssue: (input: IssueInput, runId: string) => Promise<unknown>;
+  runIssue: (input: IssueInput, runId: string) => Promise<{ status?: string } | void>;
+  /** Finalises a pre-created row that will never run: status failed, a warning step naming the reason. */
+  skipRun: (runId: string, reason: "funds_low" | "deadline") => Promise<void>;
+  /** Milliseconds of work allowed after the response (default 250 s, under maxDuration 300). */
+  deadlineMs?: number;
+  now?: () => number;
   /** Runs work after the response (next/server `after`). */
   defer: (work: () => Promise<void>) => void;
 };
@@ -61,12 +66,8 @@ export async function handleTry(req: Request, d: TryDeps): Promise<Response> {
   const parsed = parseBody(raw);
   if (!parsed.ok) return errorJson(400, "invalid_request", parsed.reason);
 
-  let hash: string;
-  try {
-    hash = ipHash(clientIp(req), d.salt());
-  } catch {
-    return errorJson(503, "unavailable", "not configured");
-  }
+  const hash = requestHash(req, d.salt);
+  if (hash instanceof Response) return hash;
 
   const gate = await fundsGate(d.funds);
   if (gate.paused) return errorJson(503, "paused", gate.reason);
@@ -90,11 +91,21 @@ export async function handleTry(req: Request, d: TryDeps): Promise<Response> {
     return internalError();
   }
 
-  // Sequential on purpose: for the spam wave, per-user budget refusals show up mid-wave.
+  // Sequential on purpose: for the spam wave, per-user budget refusals (refused_budget,
+  // blocked_author) are the demo and must keep going. Only a funds shortage or the deadline stops it.
   d.defer(async () => {
+    const now = d.now ?? Date.now;
+    const stopAt = now() + (d.deadlineMs ?? 250_000);
+    let stop: "funds_low" | "deadline" | null = null;
     for (let i = 0; i < inputs.length; i++) {
+      if (!stop && now() >= stopAt) stop = "deadline";
+      if (stop) {
+        await d.skipRun(runIds[i], stop).catch(() => undefined);
+        continue;
+      }
       try {
-        await d.runIssue(inputs[i], runIds[i]);
+        const out = await d.runIssue(inputs[i], runIds[i]);
+        if (out && out.status === "refused_funds") stop = "funds_low";
       } catch (e) {
         console.warn(`porter try run failed: ${e instanceof Error ? e.name : "error"}`);
       }

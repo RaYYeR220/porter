@@ -25,7 +25,7 @@ export type AuthorRow = {
 export interface AuthorsStore {
   upsertMany(rows: AuthorRow[]): Promise<void>;
   list(): Promise<AuthorRow[]>;
-  patch(externalId: string, set: Partial<Pick<AuthorRow, "budgetId" | "blocked">>): Promise<void>;
+  get(externalId: string): Promise<AuthorRow | null>;
 }
 
 export function drizzleAuthorsStore(getDb = defaultDb): AuthorsStore {
@@ -51,8 +51,9 @@ export function drizzleAuthorsStore(getDb = defaultDb): AuthorsStore {
     async list() {
       return getDb().select().from(authors).orderBy(desc(authors.spendUsd)).limit(LIST_LIMIT);
     },
-    async patch(externalId, set) {
-      await getDb().update(authors).set(set).where(eq(authors.externalId, externalId));
+    async get(externalId) {
+      const [r] = await getDb().select().from(authors).where(eq(authors.externalId, externalId)).limit(1);
+      return r ?? null;
     },
   };
 }
@@ -170,17 +171,28 @@ export const AUTHOR_ACTIONS = ["block", "unblock", "upgrade", "downgrade"] as co
 export type AuthorAction = (typeof AUTHOR_ACTIONS)[number];
 export const isAuthorAction = (v: unknown): v is AuthorAction => typeof v === "string" && (AUTHOR_ACTIONS as readonly string[]).includes(v);
 
-/** Applies a maintainer action through the stranger key's end-users API and mirrors it locally. */
-export async function applyAuthorAction(id: string, action: AuthorAction, d: AuthorsDeps): Promise<void> {
-  if (action === "upgrade") {
-    await d.otari.endUsers.put(id, d.regularBudgetId);
-    await d.store.patch(id, { budgetId: d.regularBudgetId });
-  } else if (action === "downgrade") {
-    await d.otari.endUsers.put(id, d.newcomerBudgetId);
-    await d.store.patch(id, { budgetId: d.newcomerBudgetId });
+/**
+ * Applies a maintainer action through the stranger key's end-users API and upserts the mirror row.
+ * The target must already exist (in `authors`, or known to Otari): the console never creates
+ * end users. Returns "unknown_author" otherwise, with nothing written.
+ */
+export async function applyAuthorAction(id: string, action: AuthorAction, d: AuthorsDeps): Promise<"ok" | "unknown_author"> {
+  const at = (d.now ?? (() => new Date()))();
+  let row = await d.store.get(id);
+  if (!row) {
+    const user = isManaged(id) ? await d.otari.endUsers.get(id) : null;
+    if (!user || user.external_id !== id) return "unknown_author";
+    row = toRow(user, at);
+  }
+  if (action === "upgrade" || action === "downgrade") {
+    const budgetId = action === "upgrade" ? d.regularBudgetId : d.newcomerBudgetId;
+    await d.otari.endUsers.put(id, budgetId);
+    row = { ...row, budgetId };
   } else {
     const blocked = action === "block";
     await d.otari.endUsers.patch(id, { blocked });
-    await d.store.patch(id, { blocked });
+    row = { ...row, blocked };
   }
+  await d.store.upsertMany([{ ...row, refreshedAt: at }]);
+  return "ok";
 }

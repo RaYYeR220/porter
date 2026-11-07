@@ -1,9 +1,9 @@
-import { and, desc, eq, lt, or, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, sql, type SQL } from "drizzle-orm";
 import { db as defaultDb } from "../db/client";
 import { guardVerdicts, proposals, runs, steps } from "../db/schema";
 import type { KvStore } from "../kv";
 import { reviewKey } from "../agent/pipeline";
-import { errorJson, safeJson, stripSecretFields } from "./common";
+import { errorJson, safeJson } from "./common";
 
 export const RUN_SOURCES = ["github", "web", "eval", "shadow"] as const;
 export const MAX_LIMIT = 50;
@@ -21,6 +21,8 @@ export type RunListRow = {
   totalCostUsd: number;
   createdAt: Date;
   finishedAt: Date | null;
+  /** created_at as Postgres prints it (microseconds). Keyset cursor only; never sent to clients. */
+  createdAtKey: string;
 };
 
 export type RunDetail = {
@@ -31,7 +33,7 @@ export type RunDetail = {
 };
 
 export interface RunsReadStore {
-  list(q: { source?: string; status?: string; limit: number; before?: { at: Date; id: string } }): Promise<RunListRow[]>;
+  list(q: { source?: string; status?: string; limit: number; before?: { at: string; id: string } }): Promise<RunListRow[]>;
   get(id: string): Promise<RunDetail | null>;
 }
 
@@ -47,6 +49,7 @@ const listCols = {
   totalCostUsd: runs.totalCostUsd,
   createdAt: runs.createdAt,
   finishedAt: runs.finishedAt,
+  createdAtKey: sql<string>`${runs.createdAt}::text`,
 };
 
 export function drizzleRunsStore(getDb = defaultDb): RunsReadStore {
@@ -56,8 +59,7 @@ export function drizzleRunsStore(getDb = defaultDb): RunsReadStore {
       if (q.source) conds.push(eq(runs.source, q.source as (typeof RUN_SOURCES)[number]));
       if (q.status) conds.push(eq(runs.status, q.status));
       if (q.before) {
-        const c = or(lt(runs.createdAt, q.before.at), and(eq(runs.createdAt, q.before.at), sql`${runs.id} < ${q.before.id}`));
-        if (c) conds.push(c);
+        conds.push(sql`(${runs.createdAt}, ${runs.id}) < (${q.before.at}::timestamptz, ${q.before.id}::uuid)`);
       }
       return getDb()
         .select(listCols)
@@ -80,16 +82,23 @@ export function drizzleRunsStore(getDb = defaultDb): RunsReadStore {
   };
 }
 
-export const encodeCursor = (at: Date, id: string) => Buffer.from(`${at.toISOString()}|${id}`).toString("base64url");
+const TS_RE = /^\d{4}-\d\d-\d\d[ T]\d\d:\d\d:\d\d(?:\.\d{1,6})?(?:Z|[+-]\d\d(?::?\d\d)?)$/;
 
-export function decodeCursor(c: string): { at: Date; id: string } | null {
+export const encodeCursor = (createdAtKey: string, id: string) => Buffer.from(`${createdAtKey}|${id}`).toString("base64url");
+
+export function decodeCursor(c: string): { at: string; id: string } | null {
   try {
-    const [iso, id] = Buffer.from(c, "base64url").toString("utf8").split("|");
-    const at = new Date(iso);
-    return Number.isNaN(at.getTime()) || !UUID_RE.test(id ?? "") ? null : { at, id };
+    const [at, id] = Buffer.from(c, "base64url").toString("utf8").split("|");
+    return TS_RE.test(at ?? "") && UUID_RE.test(id ?? "") ? { at, id } : null;
   } catch {
     return null;
   }
+}
+
+function publicRow<T extends { createdAtKey: string }>(r: T): Omit<T, "createdAtKey"> {
+  const copy: Partial<T> = { ...r };
+  delete copy.createdAtKey;
+  return copy as Omit<T, "createdAtKey">;
 }
 
 /** GET /api/runs?source=&status=&limit=&cursor= */
@@ -110,7 +119,10 @@ export async function handleRunsList(req: Request, store: RunsReadStore): Promis
   const rows = await store.list({ source, status, limit: limit + 1, before: before ?? undefined });
   const page = rows.slice(0, limit);
   const last = page[page.length - 1];
-  return safeJson({ runs: page, nextCursor: rows.length > limit && last ? encodeCursor(last.createdAt, last.id) : null });
+  return safeJson({
+    runs: page.map(publicRow),
+    nextCursor: rows.length > limit && last ? encodeCursor(last.createdAtKey, last.id) : null,
+  });
 }
 
 /** GET /api/runs/:id → run, steps, guard verdicts, proposals, and the queue flags. */
@@ -120,8 +132,8 @@ export async function handleRunGet(id: string, store: RunsReadStore, kv: KvStore
   if (!detail) return errorJson(404, "not_found");
   const [queued, review] = await Promise.all([kv.get(`queued_reply:${id}`), kv.get(reviewKey(id))]);
   return safeJson({
-    run: detail.run,
-    steps: stripSecretFields(detail.steps),
+    run: publicRow(detail.run),
+    steps: detail.steps,
     guardVerdicts: detail.guardVerdicts,
     proposals: detail.proposals,
     queued: queued !== null,

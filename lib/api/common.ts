@@ -9,10 +9,29 @@ export function errorJson(status: number, error: string, reason?: string, header
 export const rateLimited = () => errorJson(429, "rate_limited", undefined, { "Retry-After": "3600" });
 export const internalError = () => errorJson(500, "internal");
 
-/** First hop of x-forwarded-for, else x-real-ip, else "unknown". Never stored; only hashed. */
-export function clientIp(req: Request): string {
-  const xff = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  return xff || req.headers.get("x-real-ip")?.trim() || "unknown";
+const lastHop = (v: string | null) => v?.split(",").map((x) => x.trim()).filter(Boolean).pop() ?? null;
+
+/**
+ * Client address as our platform saw it: x-vercel-forwarded-for, then x-real-ip, then the LAST hop
+ * of x-forwarded-for (the one the platform appended; earlier hops are client-controlled). With none
+ * of them: null in production, a shared "dev" bucket locally. Never stored; only hashed.
+ */
+export function clientIp(req: Request, env: Record<string, string | undefined> = process.env): string | null {
+  const ip =
+    req.headers.get("x-vercel-forwarded-for")?.trim() || req.headers.get("x-real-ip")?.trim() || lastHop(req.headers.get("x-forwarded-for"));
+  if (ip) return ip;
+  return env.NODE_ENV === "production" || env.VERCEL === "1" ? null : "dev";
+}
+
+/** ip + daily salt → hash, or the error response to return (no address: 400; no secret: 503). */
+export function requestHash(req: Request, salt: () => string): string | Response {
+  const ip = clientIp(req);
+  if (!ip) return errorJson(400, "no_client_ip");
+  try {
+    return ipHash(ip, salt());
+  } catch {
+    return errorJson(503, "unavailable", "not configured");
+  }
 }
 
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
@@ -42,7 +61,8 @@ export function redactSecrets<T>(value: T): T {
   return JSON.parse(text) as T;
 }
 
-const SECRET_KEY_RE = /authorization|token|key|secret|password|cookie/i;
+/** Anchored on purpose: `tokens_in` and `keyword` are data, `access_token` and `apiKey` are not. */
+const SECRET_KEY_RE = /^(authorization|cookie|set-cookie|password|passwd|.*api[_-]?key|.*secret|.*token)$/i;
 
 /** Drops fields whose name looks credential-like, at any depth. */
 export function stripSecretFields(v: unknown, depth = 0): unknown {
@@ -58,9 +78,10 @@ export function stripSecretFields(v: unknown, depth = 0): unknown {
   return v;
 }
 
-/** A safe JSON response: credential-shaped substrings never leave the server. */
+/** A safe JSON response: credential-named fields are dropped at any depth and key-shaped values redacted. */
 export function safeJson(body: unknown, status = 200): Response {
-  return Response.json(redactSecrets(body), { status, headers: { "Cache-Control": "no-store" } });
+  const plain = JSON.parse(JSON.stringify(body)) as unknown;
+  return Response.json(redactSecrets(stripSecretFields(plain)), { status, headers: { "Cache-Control": "no-store" } });
 }
 
 /** Runs a route body; any thrown error becomes a plain JSON 500 (no message, no stack). */

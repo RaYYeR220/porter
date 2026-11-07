@@ -1,6 +1,6 @@
 import { applyAuthorAction, isActionableId, isAuthorAction, type AuthorsDeps } from "../authors";
 import type { KvStore } from "../kv";
-import { clientIp, errorJson, internalError, ipHash, type Limiter, rateLimited } from "./common";
+import { errorJson, internalError, requestHash, type Limiter, rateLimited } from "./common";
 
 export const AUTHOR_ACTIONS_PER_HOUR = 5;
 export const AUDIT_TTL_MS = 30 * 24 * 3600_000;
@@ -31,16 +31,12 @@ export async function handleAuthorAction(req: Request, rawId: string, d: AuthorA
   const action = (body as { action?: unknown } | null)?.action;
   if (!isAuthorAction(action)) return errorJson(400, "invalid_request", "action must be block, unblock, upgrade or downgrade");
 
-  let hash: string;
-  try {
-    hash = ipHash(clientIp(req), d.salt());
-  } catch {
-    return errorJson(503, "unavailable", "not configured");
-  }
+  const hash = requestHash(req, d.salt);
+  if (hash instanceof Response) return hash;
   if (!(await d.limit(`rl:author:${hash.slice(0, 16)}`, AUTHOR_ACTIONS_PER_HOUR, 3600))) return rateLimited();
 
   try {
-    await applyAuthorAction(id, action, d.authors);
+    if ((await applyAuthorAction(id, action, d.authors)) === "unknown_author") return errorJson(404, "unknown_author");
     const ts = (d.now ?? Date.now)();
     await d.kv.put(
       `author_action:${ts}-${Math.random().toString(36).slice(2, 6)}`,

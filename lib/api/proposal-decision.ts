@@ -1,5 +1,5 @@
 import { applyProposal, rejectProposal, type ApplyDeps } from "../github/commands";
-import { clientIp, errorJson, internalError, ipHash, type Limiter, rateLimited } from "./common";
+import { errorJson, internalError, requestHash, type Limiter, rateLimited } from "./common";
 
 export const APPROVALS_PER_HOUR = 5;
 
@@ -23,12 +23,8 @@ export async function handleProposalDecision(req: Request, rawId: string, d: Pro
   if (decision !== "approve" && decision !== "reject") return errorJson(400, "invalid_request", "decision must be approve or reject");
   if (!d.demoRepo) return errorJson(503, "unavailable", "The demo repository is not configured yet.");
 
-  let hash: string;
-  try {
-    hash = ipHash(clientIp(req), d.salt());
-  } catch {
-    return errorJson(503, "unavailable", "not configured");
-  }
+  const hash = requestHash(req, d.salt);
+  if (hash instanceof Response) return hash;
   if (!(await d.limit(`rl:approve:${hash.slice(0, 16)}`, APPROVALS_PER_HOUR, 3600))) return rateLimited();
 
   try {

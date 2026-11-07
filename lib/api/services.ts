@@ -1,4 +1,6 @@
 import { armClient, runIssue, startRun } from "../agent/pipeline";
+import { createDbRecorder } from "../agent/record";
+import { db } from "../db/client";
 import { drizzleAuthorsStore, type AuthorsDeps } from "../authors";
 import { parseFloor } from "../balance";
 import { getMaintainerEnv, getRegularBudgetId } from "../env";
@@ -52,6 +54,15 @@ export const productionApi = {
       },
       startRun: (input) => startRun(input, {}),
       runIssue: (input, runId) => runIssue(input, { otari: armClient("porter").otari, runId }),
+      skipRun: async (runId, reason) => {
+        const rec = createDbRecorder(db());
+        await rec.addStep(runId, {
+          role: "warning", requestedModel: null, servedModel: null, provider: null, fallback: false, attemptCount: null,
+          requestId: null, costUsd: null, durationMs: null, guardrails: null, toolCalls: null,
+          errorKind: `skipped: ${reason}`, errorStatus: null,
+        });
+        await rec.finishRun(runId, { status: "failed", reply: null, triage: null, totalCostUsd: 0, finishedAt: new Date() });
+      },
       defer,
     };
   },

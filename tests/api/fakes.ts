@@ -50,9 +50,8 @@ export function memoryAuthorsStore() {
     async list() {
       return [...rows.values()].sort((a, b) => b.spendUsd - a.spendUsd);
     },
-    async patch(id, set) {
-      const r = rows.get(id);
-      if (r) rows.set(id, { ...r, ...set });
+    async get(id) {
+      return rows.get(id) ?? null;
     },
   };
   return { store, rows, upserts: () => upserts };
@@ -88,7 +87,7 @@ export function memoryProposalStore(list: Array<StoredProposal & { decidedBy?: s
 
 export function req(url: string, init: { method?: string; body?: unknown; ip?: string; raw?: string } = {}): Request {
   const headers: Record<string, string> = { "content-type": "application/json" };
-  if (init.ip) headers["x-forwarded-for"] = `${init.ip}, 10.0.0.1`;
+  if (init.ip) headers["x-vercel-forwarded-for"] = init.ip;
   return new Request(url, {
     method: init.method ?? "POST",
     headers,

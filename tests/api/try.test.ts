@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dailySalt, ipHash, webUserId } from "../../lib/api/common";
+import { clientIp, dailySalt, ipHash, webUserId } from "../../lib/api/common";
 import { INSUFFICIENT_FUNDS_FLAG } from "../../lib/agent/pipeline";
 import { parseFloor } from "../../lib/balance";
 import { handleTry, type TryDeps } from "../../lib/try/handler";
@@ -16,6 +16,7 @@ function setup(over: Partial<TryDeps> & { budget?: KeyBudget | Error } = {}) {
   const lim = memoryLimiter();
   const started: IssueInput[] = [];
   const ran: Array<{ input: IssueInput; runId: string }> = [];
+  const skipped: Array<{ runId: string; reason: string }> = [];
   const deferred: Array<() => Promise<void>> = [];
   let budgetCalls = 0;
   const budget = budgetOver ?? { budgets_enforced: true, remaining_usd: 10, limits: [] };
@@ -39,6 +40,9 @@ function setup(over: Partial<TryDeps> & { budget?: KeyBudget | Error } = {}) {
     runIssue: async (input, runId) => {
       ran.push({ input, runId });
     },
+    skipRun: async (runId, reason) => {
+      skipped.push({ runId, reason });
+    },
     defer: (w) => deferred.push(w),
     ...depsOver,
   };
@@ -46,7 +50,7 @@ function setup(over: Partial<TryDeps> & { budget?: KeyBudget | Error } = {}) {
   const flush = async () => {
     for (const w of deferred.splice(0)) await w();
   };
-  return { deps, post, flush, started, ran, kv, m, lim, budgetCalls: () => budgetCalls };
+  return { deps, post, flush, started, ran, skipped, kv, m, lim, budgetCalls: () => budgetCalls };
 }
 
 describe("POST /api/try", () => {
@@ -144,6 +148,50 @@ describe("POST /api/try", () => {
     expect(n).toBe(12);
   });
 
+  it("refused_budget and blocked_author keep the wave going", async () => {
+    let n = 0;
+    const t = setup({
+      runIssue: async () => {
+        n++;
+        return { status: n % 2 ? "refused_budget" : "blocked_author" };
+      },
+    });
+    await t.post({ preset: "spam" });
+    await t.flush();
+    expect(n).toBe(12);
+    expect(t.skipped).toHaveLength(0);
+  });
+
+  it("refused_funds stops the wave and finalises the remaining rows", async () => {
+    let n = 0;
+    const t = setup({
+      runIssue: async () => ({ status: ++n === 4 ? "refused_funds" : "answered" }),
+    });
+    const { runIds } = await (await t.post({ preset: "spam" })).json();
+    await t.flush();
+    expect(n).toBe(4);
+    expect(t.skipped).toEqual(runIds.slice(4).map((runId: string) => ({ runId, reason: "funds_low" })));
+  });
+
+  it("the deadline stops the wave and finalises the remaining rows", async () => {
+    let clock = 1_000_000;
+    let n = 0;
+    const t = setup({
+      now: () => clock,
+      deadlineMs: 250_000,
+      runIssue: async () => {
+        n++;
+        clock += n === 5 ? 300_000 : 1_000;
+        return { status: "answered" };
+      },
+    });
+    const { runIds } = await (await t.post({ preset: "spam" })).json();
+    await t.flush();
+    expect(n).toBe(5);
+    expect(t.skipped.map((x) => x.reason)).toEqual(Array(7).fill("deadline"));
+    expect(t.skipped.map((x) => x.runId)).toEqual(runIds.slice(5));
+  });
+
   it("429 on the 7th request in an hour from one IP; the spam preset counts as one", async () => {
     const t = setup();
     for (let i = 0; i < 6; i++) expect((await t.post({ preset: "spam" })).status).toBe(202);
@@ -171,6 +219,45 @@ describe("POST /api/try", () => {
     expect(a).not.toBe(b);
     expect(dailySalt({ IP_SALT: "s", CRON_SECRET: "c" }, new Date("2026-11-07T00:00:00Z"))).toContain("s:");
     expect(ipHash(IP, a)).not.toBe(ipHash(IP, b));
+  });
+
+  it("client ip precedence: x-vercel-forwarded-for, x-real-ip, then the last x-forwarded-for hop", () => {
+    const h = (o: Record<string, string>) => new Request("http://x", { headers: o });
+    const prod = { NODE_ENV: "production" };
+    expect(clientIp(h({ "x-vercel-forwarded-for": "1.1.1.1", "x-real-ip": "2.2.2.2", "x-forwarded-for": "3.3.3.3, 4.4.4.4" }), prod)).toBe("1.1.1.1");
+    expect(clientIp(h({ "x-real-ip": "2.2.2.2", "x-forwarded-for": "3.3.3.3, 4.4.4.4" }), prod)).toBe("2.2.2.2");
+    expect(clientIp(h({ "x-forwarded-for": "6.6.6.6, 4.4.4.4" }), prod)).toBe("4.4.4.4");
+    expect(clientIp(h({}), prod)).toBeNull();
+    expect(clientIp(h({}), { VERCEL: "1" })).toBeNull();
+    expect(clientIp(h({}), {})).toBe("dev");
+  });
+
+  it("a spoofed first x-forwarded-for hop does not change the bucket or the end user", async () => {
+    const t = setup();
+    const mk = (spoof: string) =>
+      new Request("http://x/api/try", {
+        method: "POST",
+        headers: { "x-vercel-forwarded-for": "9.9.9.9", "x-forwarded-for": `${spoof}, 9.9.9.9` },
+        body: JSON.stringify({ title: "hi" }),
+      });
+    await handleTry(mk("1.2.3.4"), t.deps);
+    await handleTry(mk("5.6.7.8"), t.deps);
+    expect(t.started[0].authorExternalId).toBe(t.started[1].authorExternalId);
+    expect([...t.lim.counts.values()]).toEqual([2]);
+  });
+
+  it("400 no_client_ip in production when no address header exists", async () => {
+    const t = setup();
+    const env = process.env as Record<string, string | undefined>;
+    const prev = env.NODE_ENV;
+    env.NODE_ENV = "production";
+    try {
+      const res = await handleTry(new Request("http://x/api/try", { method: "POST", body: JSON.stringify({ title: "hi" }) }), t.deps);
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toBe("no_client_ip");
+    } finally {
+      env.NODE_ENV = prev;
+    }
   });
 
   it("falls back to x-real-ip", async () => {

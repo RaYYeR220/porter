@@ -15,6 +15,7 @@ const row = (n: number): RunListRow => ({
   totalCostUsd: 0.01,
   createdAt: new Date(Date.UTC(2026, 10, 7, 12, 0, 60 - n)),
   finishedAt: null,
+  createdAtKey: `2026-11-07 12:00:${String(60 - n).padStart(2, "0")}.123456+00`,
 });
 
 function store(over: Partial<RunDetail> = {}, rows: RunListRow[] = []): RunsReadStore & { lastList?: unknown } {
@@ -104,8 +105,36 @@ describe("GET /api/runs", () => {
     expect((await handleRunsList(new Request("http://x/api/runs?cursor=zzz"), s)).status).toBe(400);
   });
 
-  it("cursor round-trips", () => {
-    const at = new Date("2026-11-07T10:00:00.000Z");
+  it("cursor keeps microseconds so rows in the same millisecond are not skipped", async () => {
+    const a = { ...row(1), createdAtKey: "2026-11-07 12:00:00.123456+00" };
+    const b = { ...row(2), createdAtKey: "2026-11-07 12:00:00.123455+00" };
+    const s = store({}, [a, b]);
+    const body = await (await handleRunsList(new Request("http://x/api/runs?limit=1"), s)).json();
+    expect(body.runs[0]).not.toHaveProperty("createdAtKey");
+    await handleRunsList(new Request(`http://x/api/runs?cursor=${body.nextCursor}`), s);
+    expect(s.lastList).toMatchObject({ before: { at: "2026-11-07 12:00:00.123456+00", id: a.id } });
+  });
+
+  it("cursor round-trips and rejects junk timestamps", () => {
+    const at = "2026-11-07 10:00:00.123456+00";
     expect(decodeCursor(encodeCursor(at, ID))).toEqual({ at, id: ID });
+    expect(decodeCursor(encodeCursor("x; drop table runs;--", ID))).toBeNull();
+  });
+
+  it("strips credential-named fields everywhere but keeps tokens_in and keyword", async () => {
+    const { kv } = memoryKv();
+    const s = store({
+      run: { ...row(1), id: ID, body: "b", reply: "r", triage: { api_key: "k", keyword: "kw", tokens_in: 12 } },
+      proposals: [{ id: 1, args: { labels: ["bug"], Authorization: "x" }, execution: { access_token: "t", ok: true } }],
+      guardVerdicts: [{ id: 1, signals: { client_secret: "s", score: 1 } }],
+      steps: [{ id: 1, toolCalls: [{ tokens_in: 3, password: "p" }] }],
+    });
+    const body = await (await handleRunGet(ID, s, kv)).json();
+    expect(body.run.triage).toEqual({ keyword: "kw", tokens_in: 12 });
+    expect(body.proposals[0]).toEqual({ id: 1, args: { labels: ["bug"] }, execution: { ok: true } });
+    expect(body.guardVerdicts[0].signals).toEqual({ score: 1 });
+    expect(body.steps[0].toolCalls[0]).toEqual({ tokens_in: 3 });
+    expect(body.run.createdAt).toBeTypeOf("string");
+    expect(body.run).not.toHaveProperty("createdAtKey");
   });
 });
