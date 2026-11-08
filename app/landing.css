@@ -1,0 +1,401 @@
+/* ---------- hero ----------
+   One calm block in the upper-middle (cap height at ~22% of the viewport), the glyph field confined to a
+   lower band (about a third of the viewport), the hint under it. The nav sits above, in the site header. */
+.hero {
+  position: relative;
+  min-height: calc(100vh - var(--nav));
+  min-height: calc(100svh - var(--nav));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.copy {
+  text-align: center;
+  flex: none;
+  padding-top: max(40px, calc(22vh - var(--nav) - var(--h1) * 0.19));
+  padding-top: max(40px, calc(22svh - var(--nav) - var(--h1) * 0.19));
+}
+.hero h1 {
+  font-weight: 500;
+  font-size: var(--h1);
+  line-height: 0.98;
+  letter-spacing: -0.046em;
+  max-width: 1200px;
+  margin: 0 auto;
+  text-wrap: balance;
+}
+.sub {
+  font-size: var(--text-lead);
+  line-height: 1.55;
+  color: var(--ink-2);
+  max-width: 620px;
+  margin: 24px auto 0;
+  text-wrap: pretty;
+}
+.ctas {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 30px;
+}
+.proof {
+  margin-top: 20px;
+  font-size: var(--text-xs);
+  color: var(--ink-3);
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.proof .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-wash);
+}
+.proof code {
+  font-size: var(--text-data);
+  color: var(--ink-2);
+}
+.proof .sep {
+  color: var(--ink-4);
+}
+.proof-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* the stage takes what is left of the first screen: a little air, the band, the hint */
+.stage {
+  flex: 1 1 0;
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+}
+.stage .air {
+  flex: 1 1 0;
+  min-height: 22px;
+}
+.band {
+  position: relative;
+  flex: 9 1 0;
+  min-height: 216px;
+  max-height: 34vh;
+  max-height: 34svh;
+}
+.field {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: crosshair;
+  animation: fade 1.2s 0.1s var(--ease) both;
+}
+.hint {
+  flex: none;
+  height: 50px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 10px;
+  pointer-events: none;
+}
+.hint p {
+  font-size: 12.5px;
+  letter-spacing: 0.005em;
+  color: var(--ink-3);
+  align-items: center;
+  gap: 9px;
+}
+.hint .sep {
+  color: var(--ink-4);
+}
+.hint .hint-pointer {
+  display: inline-flex;
+}
+.hint .hint-touch {
+  display: none;
+}
+@media (hover: none) {
+  .hint .hint-pointer {
+    display: none;
+  }
+  .hint .hint-touch {
+    display: inline-flex;
+  }
+}
+
+/* ---------- how it works ---------- */
+.how {
+  padding: 120px 0;
+  border-top: 1px solid var(--hair);
+  scroll-margin-top: 8px;
+}
+.how-head {
+  text-align: center;
+  margin: 0 auto 64px;
+  max-width: 760px;
+}
+.kick {
+  font-size: var(--text-sm);
+  color: var(--ink-3);
+  margin-bottom: 14px;
+}
+.how h2 {
+  font-weight: 500;
+  font-size: var(--h2);
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+  text-wrap: balance;
+}
+.how-head p {
+  margin: 18px auto 0;
+  max-width: 520px;
+  color: var(--ink-2);
+  font-size: var(--text-body);
+  line-height: 1.55;
+}
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-top: 1px solid var(--hair-2);
+}
+.step {
+  padding: 30px 32px 8px 0;
+}
+.step + .step {
+  padding-left: 32px;
+  border-left: 1px solid var(--hair);
+}
+.step svg {
+  display: block;
+  width: 100%;
+  max-width: 220px;
+  height: 64px;
+  margin-bottom: 24px;
+  overflow: visible;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.step .verb {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.step .n {
+  font-family: var(--mono);
+  font-size: var(--text-data);
+  color: var(--ink-3);
+}
+.step h3 {
+  font-weight: 500;
+  font-size: var(--h3);
+  line-height: 1.1;
+  letter-spacing: -0.04em;
+}
+.step p {
+  font-size: var(--text-body);
+  line-height: 1.55;
+  color: var(--ink-2);
+  max-width: 360px;
+}
+.step .data {
+  margin-top: 18px;
+  font-family: var(--mono);
+  font-size: var(--text-data);
+  line-height: 1.7;
+  color: var(--ink-3);
+}
+.step .data b {
+  font-weight: 500;
+  color: var(--accent);
+}
+/* the small drawings: glyphs on the line, in the field's own colours */
+.g-line {
+  stroke: var(--ink-2);
+  stroke-opacity: 0.5;
+}
+.g-line-faint {
+  stroke: var(--ink-2);
+  stroke-opacity: 0.25;
+}
+.g-hold {
+  stroke: var(--accent);
+}
+.g-tick {
+  stroke: var(--glyph-3);
+  fill: none;
+}
+.g-pill {
+  fill: none;
+  stroke: var(--ink);
+  stroke-opacity: 0.5;
+}
+.g-mid {
+  fill: var(--glyph-3);
+}
+.g-dim {
+  fill: var(--ink-4);
+}
+.g-lit {
+  fill: var(--ink-2);
+}
+.g-ice {
+  fill: var(--accent);
+}
+.g-ink {
+  fill: var(--ink);
+}
+
+/* ---------- what runs where ---------- */
+.runs {
+  padding: 104px 0 120px;
+  border-top: 1px solid var(--hair);
+}
+.runs-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
+  gap: 48px;
+}
+.runs-head h2 {
+  font-weight: 500;
+  font-size: var(--h3);
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+}
+.runs-head p {
+  line-height: 1.55;
+  margin-top: 16px;
+  max-width: 340px;
+  color: var(--ink-2);
+}
+.runs-list {
+  border-top: 1px solid var(--hair-2);
+}
+.run {
+  display: grid;
+  grid-template-columns: minmax(0, 15rem) minmax(0, 1fr);
+  gap: 8px 32px;
+  padding: 22px 0;
+  border-bottom: 1px solid var(--hair);
+}
+.run dt {
+  font-weight: 500;
+  font-size: var(--text-lead);
+  letter-spacing: -0.02em;
+  line-height: 1.4;
+}
+.run dd {
+  line-height: 1.55;
+  color: var(--ink-2);
+  max-width: 560px;
+}
+.run dd .id {
+  white-space: nowrap;
+}
+.run dd code {
+  display: block;
+  margin-top: 8px;
+  font-size: var(--text-data);
+  line-height: 1.7;
+  color: var(--ink-3);
+}
+
+/* ---------- narrow screens ---------- */
+@media (max-width: 960px) {
+  .runs-grid {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+}
+@media (max-width: 720px) {
+  .copy {
+    padding-top: clamp(36px, 6.5vh, 64px);
+    padding-top: clamp(36px, 6.5svh, 64px);
+  }
+  .hero h1 {
+    line-height: 1;
+    letter-spacing: -0.045em;
+  }
+  .sub {
+    font-size: var(--text-body);
+    margin-top: 18px;
+  }
+  .ctas {
+    flex-direction: column;
+    align-items: stretch;
+    margin-top: 24px;
+    gap: 8px;
+  }
+  .btn {
+    justify-content: center;
+  }
+  .proof {
+    margin-top: 16px;
+    font-size: var(--text-data);
+    line-height: 1.5;
+  }
+  .proof code {
+    font-size: 11px;
+  }
+  .stage {
+    flex: none;
+    min-height: 0;
+    margin-top: auto;
+  }
+  .stage .air {
+    flex: none;
+    height: 18px;
+    min-height: 0;
+  }
+  .band {
+    flex: none;
+    height: 250px;
+    min-height: 0;
+    max-height: none;
+  }
+  .hint {
+    height: 46px;
+  }
+  .hint p {
+    font-size: var(--text-data);
+  }
+  .how {
+    padding: 72px 0;
+  }
+  .how-head {
+    text-align: left;
+    margin-bottom: 36px;
+  }
+  .steps {
+    grid-template-columns: 1fr;
+  }
+  .step,
+  .step + .step {
+    padding: 26px 0 30px;
+    border-left: 0;
+    border-bottom: 1px solid var(--hair);
+  }
+  .runs {
+    padding: 64px 0 72px;
+  }
+  .run {
+    grid-template-columns: 1fr;
+    padding: 18px 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .field {
+    animation: none;
+  }
+  .hint .on-click,
+  .hint .hint-touch {
+    display: none;
+  }
+}
