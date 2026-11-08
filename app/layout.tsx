@@ -1,25 +1,15 @@
+import { GeistMono } from "geist/font/mono";
 import type { Metadata, Viewport } from "next";
-import { Geist_Mono } from "next/font/google";
-import localFont from "next/font/local";
 import type { ReactNode } from "react";
+import { preload } from "react-dom";
 import { Footer } from "../components/site/Footer";
 import { Nav } from "../components/site/Nav";
 import { SITE_URL } from "../components/site/links";
 import "./globals.css";
 
-// General Sans (Indian Type Foundry, Fontshare Free Font License), fetched into public/fonts by scripts/fonts.ts.
-const sans = localFont({
-  src: [
-    { path: "../public/fonts/GeneralSans-Regular.woff2", weight: "400", style: "normal" },
-    { path: "../public/fonts/GeneralSans-Medium.woff2", weight: "500", style: "normal" },
-    { path: "../public/fonts/GeneralSans-Semibold.woff2", weight: "600", style: "normal" },
-  ],
-  variable: "--font-sans",
-  display: "swap",
-  adjustFontFallback: "Arial",
-});
-
-const mono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono", display: "swap" });
+// General Sans is declared in globals.css and served from public/fonts (fetched by scripts/fonts.ts); when the
+// files are missing the page falls back to a metric-matched Arial, so neither the build nor the layout depends on them.
+const SANS_PRELOAD = ["/fonts/GeneralSans-Medium.woff2", "/fonts/GeneralSans-Regular.woff2"];
 
 const DESCRIPTION =
   "Porter answers GitHub issues from strangers on open-weight models through Otari. Attacks are held at the gateway, " +
@@ -49,8 +39,9 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
+  for (const href of SANS_PRELOAD) preload(href, { as: "font", type: "font/woff2", crossOrigin: "anonymous" });
   return (
-    <html lang="en" className={`${sans.variable} ${mono.variable}`}>
+    <html lang="en" className={GeistMono.variable}>
       <body>
         <a className="skip" href="#main">
           Skip to content

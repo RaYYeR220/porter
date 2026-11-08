@@ -1,3 +1,36 @@
+/* ---------- faces ----------
+   General Sans (Indian Type Foundry, Fontshare Free Font License) is fetched into public/fonts at dev and build
+   time. Until it loads, or if it is missing, text sets in Arial scaled to General Sans' metrics, so nothing moves. */
+@font-face {
+  font-family: "General Sans";
+  src: url("/fonts/GeneralSans-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "General Sans";
+  src: url("/fonts/GeneralSans-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "General Sans";
+  src: url("/fonts/GeneralSans-Semibold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "General Sans Fallback";
+  src: local("Arial"), local("ArialMT"), local("Liberation Sans"), local("Helvetica");
+  size-adjust: 101.11%;
+  ascent-override: 99.89%;
+  descent-override: 23.74%;
+  line-gap-override: 9.89%;
+}
+
 /* ---------- tokens ---------- */
 :root {
   /* ground and ink: a warm near-black, warm off-white, three steps down */
@@ -19,8 +52,8 @@
   --hair-3: rgba(242, 239, 232, 0.32);
 
   /* type */
-  --sans: var(--font-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --mono: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --sans: "General Sans", "General Sans Fallback", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --h1: clamp(72px, 9.6vh, 96px);
   --h2: 52px;
   --h3: 38px;

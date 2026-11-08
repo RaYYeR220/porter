@@ -20,7 +20,7 @@ export function mountField(canvas: HTMLCanvasElement, data: HeroData): () => voi
   }
   const band = canvas.parentElement ?? canvas;
   const root = document.documentElement;
-  const mono = getComputedStyle(root).getPropertyValue("--font-mono").trim() || FALLBACK_MONO;
+  const mono = getComputedStyle(root).getPropertyValue("--mono").trim() || FALLBACK_MONO;
   const renderer = new FieldRenderer(canvas, ctx, readPalette(root), mono);
   const field = new GlyphField(data, renderer.measure);
   const ptr: Pointer = { on: false, x: 0, y: 0 };

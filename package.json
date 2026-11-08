@@ -28,6 +28,7 @@
     "@octokit/webhooks-methods": "^6.0.0",
     "decode-named-character-reference": "^1.3.0",
     "drizzle-orm": "^0.45.4",
+    "geist": "1.9.2",
     "mcp-handler": "1",
     "micromark": "^4.0.3",
     "micromark-extension-gfm": "^3.0.0",
