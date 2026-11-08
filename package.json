@@ -20,7 +20,9 @@
     "shadow": "tsx --env-file=.env.local scripts/shadow.ts",
     "shadow:verify": "tsx --env-file=.env.local scripts/shadow-verify.ts",
     "hero-data": "tsx --env-file=.env.local scripts/hero-data.ts",
-    "fonts": "tsx scripts/fonts.ts"
+    "fonts": "tsx scripts/fonts.ts",
+    "seed:ui": "tsx --env-file=.env.local scripts/seed-ui-demo.ts",
+    "seed:ui:clean": "tsx --env-file=.env.local scripts/clean-ui-demo.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",
