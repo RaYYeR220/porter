@@ -1,6 +1,6 @@
 # porter-guard
 
-A guardrail service for the hosted [Otari](https://otari.ai) gateway. It implements Otari's guardrail HTTP protocol and decides with open-weight safety models plus deterministic detectors. Mandate it on an Otari workspace and every model request through that workspace is screened before any model sees it; a `valid: false` answer makes Otari refuse the request with a 403 `guardrail_violation`.
+A guardrail service for the hosted [Otari](https://otari.ai) gateway. It implements Otari's guardrail HTTP protocol and decides with open-weight safety models plus deterministic detectors. In Porter it runs as an org-level guardrail, mandated on workspace `desk`: every model request through that workspace is screened before any model sees it, and a `valid: false` answer makes Otari refuse the request with a 403 `guardrail_violation`. Any hosted Otari org can mandate it on its own workspaces the same way.
 
 Hosted Otari has no guardrail service of its own (the built-in `prompt-injection` profile exists only on self-hosted installs, and catalog guardrails need a vendor key). This package is the bring-your-own service that fills that gap with open-weight models only.
 
@@ -77,23 +77,23 @@ Otherwise it returns `valid: true` and names any weak signals in the explanation
 
 The rules live in [`src/ensemble.ts`](src/ensemble.ts) and the detectors in [`src/detectors.ts`](src/detectors.ts). The tests in [`tests/`](tests) include the human template phrasings that must pass; run them with `pnpm test packages/porter-guard` from the repository root.
 
-## Mandate it in an Otari org
+## Use it as an org-level guardrail
 
-On otari.ai this is done in the dashboard; an API key cannot create guardrail definitions or mandates.
+On otari.ai this is done in the dashboard; an API key cannot create org-level guardrails or mandate them.
 
 1. Deploy the service (below) at a public HTTPS URL.
-2. Organization → Guardrails: define a guardrail with the URL of `/validate` and the credential `GUARD_TOKEN`. Otari sends the credential as `Authorization: Bearer <credential>`. Hosted Otari does not send a request-level guardrail `credential`, so a mandate is the way to authenticate the call.
-3. Mandate it on the workspaces whose traffic should be screened, for each profile you want, with mode `block` and `on_unavailable: block`.
-4. Give the service an Otari key from a workspace **without** the mandate, so its own classifier calls are not screened by itself.
+2. Organization → Guardrails: create an org-level guardrail with the URL of `/validate` and the credential `GUARD_TOKEN`. Otari sends the credential as `Authorization: Bearer <credential>`. Hosted Otari does not send a request-level guardrail `credential`, so an org-level guardrail is the way to authenticate the call.
+3. Mandate it on the workspaces whose traffic should be screened (Porter: workspace `desk`), for each profile you want, with mode `block` and `on_unavailable: block`.
+4. Give the service an Otari key from a workspace where it is **not** mandated, so its own classifier calls are not screened by itself.
 
-Mandated guardrails are input-only: Otari screens what goes into a model call, not what comes out of it.
+Org-level guardrails are input-only: Otari screens what goes into a model call, not what comes out of it.
 
 ## Environment
 
 | Variable | Meaning |
 | --- | --- |
 | `GUARD_TOKEN` | Bearer token Otari must present |
-| `OTARI_API_KEY` | Otari key for the classifier calls, from an unmandated workspace (in Porter's app this is `OTARI_KEY_GUARD`) |
+| `OTARI_API_KEY` | Otari key for the classifier calls, from a workspace where the guardrail is not mandated (in Porter's app this is `OTARI_KEY_GUARD`) |
 | `OTARI_BASE_URL` | OpenAI-compatible base URL. Default `https://api.otari.ai/api/v1`; EU orgs use `https://eu.api.otari.ai/api/v1` |
 | `PORT` | Listen port. Default `8080` |
 

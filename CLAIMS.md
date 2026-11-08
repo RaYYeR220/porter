@@ -3,11 +3,11 @@
 Every public statement Porter makes on its site and in its README, with how to check it.
 
 - **REPRODUCIBLE**: a command in this repository shows it. `pnpm test <file>` runs one test file; `pnpm eval …` and `pnpm shadow …` need an Otari org set up as in the [README](README.md#run-it-yourself).
-- **VERIFIED-LIVE**: a URL on https://porter-frontdesk.vercel.app shows it. The last column says whether it can be seen there today; [JUDGES.md](JUDGES.md#what-is-live) has the status of each part.
+- **VERIFIED-LIVE**: a URL on https://porter-frontdesk.vercel.app shows it. The last column says whether it can be seen there today. Every live check also needs a funded Otari balance, which Porter's org does not have yet; [JUDGES.md](JUDGES.md#what-is-live) has the status of each part.
 - **MODELED**: a number computed from a formula, not measured.
 - **NOT-CLAIMED**: listed at the end.
 
-No number on the site or in the README is typed by hand. Eval and spam-wave numbers come from `results/*.json` through `pnpm eval:render` and the page loaders; until those files exist, every cell says "Not run yet".
+No measured number on the site or in the README is typed by hand; the numbers that are typed are configuration (budgets, limits and constants named in the code). Eval and spam-wave numbers come from `results/*.json` through `pnpm eval:render` and the page loaders; until those files exist, every cell says "Not run yet".
 
 ## Front page
 
@@ -15,11 +15,11 @@ No number on the site or in the README is typed by hand. Eval and spam-wave numb
 | --- | --- | --- | --- |
 | "A front desk strangers can't talk their way past." | REPRODUCIBLE | It means the 25 pre-registered attacks against the Porter arm: `pnpm eval --arm porter --set attacks`, results on [/eval](https://porter-frontdesk.vercel.app/eval). It is not a claim about every possible attack (see below). | after the eval run |
 | "Porter answers GitHub issues from strangers on open-weight models through Otari." | REPRODUCIBLE, VERIFIED-LIVE | `pnpm test tests/agent/pipeline.test.ts` ("every call carries the trace headers, the end user and its role's token cap"). On a run trace, each step names the model Otari served. | after filing opens |
-| "Every issue is screened at the gateway before the answering model sees it." | REPRODUCIBLE, VERIFIED-LIVE | The mandate covers every call in workspace `desk`; `pnpm test tests/agent/pipeline.test.ts` ("guardrail 403 on the first call") and `pnpm test packages/porter-guard`. Live: the [/try](https://porter-frontdesk.vercel.app/try) **Hidden instruction** preset stops at triage with `guardrail_violation`. | after the mandate is registered |
+| "Every issue is screened at the gateway before the answering model sees it." | REPRODUCIBLE, VERIFIED-LIVE | The org-level guardrail, mandated on workspace `desk`, covers every call in that workspace; `pnpm test tests/agent/pipeline.test.ts` ("guardrail 403 on the first call") and `pnpm test packages/porter-guard`. Live: the [/try](https://porter-frontdesk.vercel.app/try) **Hidden instruction** preset stops at triage with `guardrail_violation`. | after the guardrail is mandated |
 | "Every author gets their own budget." | REPRODUCIBLE, VERIFIED-LIVE | `pnpm test tests/agent/triage.test.ts tests/authors.test.ts`. Live: per-author meters on [/console](https://porter-frontdesk.vercel.app/console). | after filing opens |
 | "Nothing gets labelled or closed until you approve it." | REPRODUCIBLE | Write actions are proposals (`pnpm test tests/agent/pipeline.test.ts`); the MCP server refuses writes outside the installed demo repository (`pnpm test tests/mcp/tools.test.ts`); approval runs `/mcp/execute` on the maintainer key (`pnpm test tests/github/commands.test.ts tests/api/proposals.test.ts`); the strangers key's gateway ACL is `@read`. | after the App is installed |
-| Hold: "it never reaches the answering model … and waits for a maintainer" | REPRODUCIBLE | `pnpm test tests/agent/pipeline.test.ts` ("held_guardrail, fixed reply, one step, review item"). | after the mandate is registered |
-| Hold: "spends nothing from its author's budget", "0 answer tokens" | VERIFIED-LIVE | A held run has no served model and no cost on its triage step; the author's meter on /console does not move. Guard classifier calls are billed to the separate `guard` workspace, which is why the copy says answer tokens. | after the mandate is registered |
+| Hold: "it never reaches the answering model … and waits for a maintainer" | REPRODUCIBLE | `pnpm test tests/agent/pipeline.test.ts` ("held_guardrail, fixed reply, one step, review item"). | after the guardrail is mandated |
+| Hold: "spends nothing from its author's budget", "0 answer tokens" | VERIFIED-LIVE | A held run has no served model and no cost on its triage step; the author's meter on /console does not move. Guard classifier calls bill to the separate `guard` workspace: a hold spends guard tokens, never answer tokens. | after the guardrail is mandated |
 | "screened by Qwen3Guard + gpt-oss-safeguard" | REPRODUCIBLE | [`packages/porter-guard/src/classifiers.ts`](packages/porter-guard/src/classifiers.ts), `pnpm test packages/porter-guard/tests/handler.test.ts`. | yes (code) |
 | "*N* of *M* test attacks held at the gateway" | REPRODUCIBLE | Shown only when `results/eval-porter-attacks.json` exists; computed in [`lib/site/eval-figures.ts`](lib/site/eval-figures.ts). | after the eval run |
 | Answer: "paid from its author's own daily budget and nobody else's" | VERIFIED-LIVE | The call carries the author as `user`, so Otari charges that end user's budget; other authors' meters do not move. The same spend also counts toward the `desk` workspace's daily ceiling, which all authors share. | after filing opens |
@@ -52,12 +52,12 @@ No number on the site or in the README is typed by hand. Eval and spam-wave numb
 | Only a recorded `code_execution` entry with an exit code counts as a run | REPRODUCIBLE | `pnpm test tests/agent/pipeline.test.ts` ("a code_execution record without a numeric exit code is not a verified run"). | yes (code) |
 | The reviewer strikes claims the evidence does not support | REPRODUCIBLE | The struck claims are stored on the review step and shown on the trace ([`lib/agent/review.ts`](lib/agent/review.ts)). | after filing opens |
 | The output check holds replies with off-allowlist links, the run's canary, raw HTML or invisible characters | REPRODUCIBLE | `pnpm test tests/agent/output-check.test.ts`. | yes (code) |
-| One comment per issue per run, at most 20 writes per hour per repository | REPRODUCIBLE | `pnpm test tests/github/post.test.ts` ("allows up to the limit and refuses beyond it"). | yes (code) |
+| One comment per issue per run; replies and `/porter approve` count against `WRITES_PER_HOUR`, 20 per repository per hour | REPRODUCIBLE | The constant is in [`lib/ratelimit.ts`](lib/ratelimit.ts); `pnpm test tests/github/post.test.ts` ("queues instead of posting or dropping when over the limit", "an approve over the write limit is not executed and says so"). | yes (code) |
 | A budget refusal gets a fixed reply with the reset time; a 402 posts nothing | REPRODUCIBLE | `pnpm test tests/agent/pipeline.test.ts tests/agent/replies.test.ts`. | yes (code) |
 | /try pauses below the balance floor or after a 402 | REPRODUCIBLE | `pnpm test tests/api/try.test.ts` ("503 paused when the key budget is below the floor"). | yes (code) |
 | porter-guard always answers a hard `true`/`false`, within its deadline, and fails closed on `prompt-injection` | REPRODUCIBLE | `pnpm test packages/porter-guard/tests/handler.test.ts`. | yes (code) |
 | `/api/guard/profiles` and `/api/mcp/mcp` answer 401 without a token | VERIFIED-LIVE | `curl -i https://porter-frontdesk.vercel.app/api/guard/profiles` | yes |
-| A key works only on its own region's host (an EU key gets 421 from `api.otari.ai`) | VERIFIED-LIVE | Seen while setting up Porter's own EU org: `GET /api/v1/key/budget` answers 200 on `eu.api.otari.ai` and 421 on `api.otari.ai`. Needs an EU key to repeat. | yes, with an EU key |
+| A key from an EU organisation gets 421 from `api.otari.ai`; use `eu.api.otari.ai` | VERIFIED-LIVE | With an EU key, `GET /api/v1/key/budget` answers 421 on `api.otari.ai` and 200 on `eu.api.otari.ai`. | yes, with an EU key |
 | Guard calls bill to a separate workspace; run costs are generation only | REPRODUCIBLE | [`lib/guard.ts`](lib/guard.ts) calls the classifiers with `OTARI_KEY_GUARD`, a key in workspace `guard`. | yes (code) |
 
 ## Not claimed

@@ -20,16 +20,16 @@ flowchart LR
   end
 
   subgraph org["Otari org on otari.ai"]
-    subgraph wsDesk["workspace desk: guardrail mandate, block"]
+    subgraph wsDesk["workspace desk: org-level guardrail mandated, block"]
       kStr["desk-strangers<br/>service key, per-author budgets,<br/>MCP ACL @read"]
       kMnt["desk-maintainer<br/>MCP ACL *"]
       kOps["ops<br/>embeddings"]
     end
-    subgraph wsGuard["workspace guard: no mandate"]
+    subgraph wsGuard["workspace guard: no guardrail"]
       kGrd["guard key"]
     end
     subgraph wsBase["workspace baseline: eval control arm"]
-      kBas["baseline service key<br/>no mandate, no ACL limit"]
+      kBas["baseline service key<br/>no guardrail, no ACL limit"]
     end
     loop["Gateway tool loop<br/>stored MCP server, web fetch,<br/>code execution sandbox"]
     models["Open-weight models<br/>behind routing policies"]
@@ -40,7 +40,7 @@ flowchart LR
   tryApi --> pipe
   hook -.-> pipe
   pipe -- "user = author id" --> kStr
-  kStr -. "mandate calls /validate" .-> guard
+  kStr -. "guardrail calls /validate" .-> guard
   guard --> kGrd
   kGrd --> models
   kStr --> loop
@@ -57,18 +57,18 @@ flowchart LR
   guard --> db
 ```
 
-**Solid arrows** are wired in code and configured in the Otari org. **Dotted arrows** are wired in code and wait on a one-time registration outside it: the GitHub App installation on the demo repository, the stored MCP server `porter-repo`, and the guardrail mandate pointing at `/api/guard/validate`. [JUDGES.md](../JUDGES.md#what-is-live) keeps the current status.
+**Solid arrows** are wired in code and configured in the Otari org. **Dotted arrows** are wired in code and wait on a one-time registration outside it: the GitHub App installation on the demo repository, the stored MCP server `porter-repo`, and the org-level guardrail, mandated on workspace `desk`, that points at `/api/guard/validate`. [JUDGES.md](../JUDGES.md#what-is-live) keeps the current status.
 
 ## Trust boundaries
 
 | Credential | Workspace | Who causes the call | What it may do |
 | --- | --- | --- | --- |
-| `desk-strangers` (service key) | desk | every issue, whoever wrote it, every /try visitor, and the Porter arm of the eval and shadow runs | call routing policies under the author's own end-user budget; MCP read tools only (`@read`); every request screened by the mandate |
+| `desk-strangers` (service key) | desk | every issue, whoever wrote it, every /try visitor, and the Porter arm of the eval and shadow runs | call routing policies under the author's own end-user budget; MCP read tools only (`@read`); every request screened by the org-level guardrail |
 | `desk-maintainer` | desk | a maintainer's approval in the console, or `/porter approve` from an owner, member or collaborator | run a pending proposal through `/mcp/execute` (ACL `*`); never sees issue text |
 | `ops` | desk | the snapshot and search code | embeddings for the duplicate index; no end users |
-| `guard` | guard | porter-guard, when Otari asks it for a verdict | classifier calls only; no mandate, so the guard is never screened by itself |
-| `baseline` (service key) | baseline | the eval's control arm only | the same pipeline with prompt-only defences: no mandate, no ACL limit |
-| `GUARD_TOKEN` | – | Otari's mandate | the only way into `/api/guard/validate` |
+| `guard` | guard | porter-guard, when Otari asks it for a verdict | classifier calls only; no guardrail mandated here, so the guard is never screened by itself |
+| `baseline` (service key) | baseline | the eval's control arm only | the same pipeline with prompt-only defences: no guardrail, no ACL limit |
+| `GUARD_TOKEN` | – | Otari, calling the org-level guardrail | the only way into `/api/guard/validate` |
 | `MCP_TOKEN` | – | Otari's gateway | the only way into `/api/mcp/mcp` |
 
 Issue content never travels on the maintainer key. A maintainer account can be compromised too, so an issue from the repository owner gets the same stranger treatment as anyone else's. The maintainer key is used only for a deterministic action a person chose: approving a proposal, in the console or with `/porter approve` (`lib/github/commands.ts`). `/porter upgrade` and `/porter block` go through the strangers key's end-users API, because end users belong to that key.
@@ -87,9 +87,9 @@ The MCP tools read the snapshot, never live GitHub, so a busy issue tracker cost
 
 1. GitHub delivers `issues.opened`. `app/api/github/webhook/route.ts` checks the HMAC signature, answers 202 and continues in `after()`: it claims the delivery id (a redelivery is a no-op), ignores repositories that are not the installed demo repository, and starts the run.
 2. `lib/agent/pipeline.ts` creates a run and makes the triage call on the strangers key: model `porter-triage`, `user: "gh:<login>"`, `Otari-Conversation-Id: run-<id>`, `Otari-Tags: app=porter,role=triage,arm=porter`, `mcp_server_ids: [porter-repo]`, one `otari_web_fetch` tool with an allowlist, explicit `max_tokens`.
-3. Before any model runs, Otari's mandate posts the request text to `/api/guard/validate`, once per mandated profile. porter-guard answers each with a hard `valid: true` or `false`: deterministic detectors for `secrets`, detectors plus two classifiers on the guard key for `prompt-injection`, Llama Guard 4 for `harm`. On `false`, Otari answers 403 `guardrail_violation`; the run ends held, with a fixed reply. The mandate screens every call in the desk workspace, so repro and review are screened as well.
+3. Before any model runs, Otari posts the request text to `/api/guard/validate`, the org-level guardrail, mandated on workspace `desk`, once per profile. porter-guard answers each with a hard `valid: true` or `false`: deterministic detectors for `secrets`, detectors plus two classifiers on the guard key for `prompt-injection`, Llama Guard 4 for `harm`. On `false`, Otari answers 403 `guardrail_violation`; the run ends held, with a fixed reply. The guardrail screens every call in workspace `desk`, so repro and review are screened as well.
 4. Otherwise the routing policy picks the model (tier-down when the author is past 80 % of their budget, the fallback chain when a provider fails), and the gateway runs the tool loop, calling `/api/mcp/mcp` with `MCP_TOKEN` and fetching allowed pages. The response carries `otari_tool_calls` and the `Otari-*` headers, which become a `steps` row.
 5. A Python snippet goes to `porter-repro` with `otari_code_execution`. Then `porter-review` writes the reply from the evidence. Then `lib/agent/output-check.ts` checks the reply.
-6. `lib/github/post.ts` posts one comment through the GitHub App, with a link to the run's trace; over the write limit it queues the reply instead of dropping it. Proposed labels and duplicate closes wait in `proposals` until a maintainer approves; `applyProposal` in `lib/github/commands.ts` then fetches the server revision and calls `/mcp/execute` on the maintainer key, with the proposal id as the client execution id. It never retries an execute.
+6. `lib/github/post.ts` posts one comment through the GitHub App, with a link to the run's trace; over `WRITES_PER_HOUR` (`lib/ratelimit.ts`) it queues the reply instead of dropping it. Proposed labels and duplicate closes wait in `proposals` until a maintainer approves; `applyProposal` in `lib/github/commands.ts` then fetches the server revision and calls `/mcp/execute` on the maintainer key, with the proposal id as the client execution id. It never retries an execute.
 
-A /try submission starts at step 2 with `user: "web:<hash>"`, where the hash is a daily-salted digest of the visitor's IP. It gets a reply on the page, never proposals.
+An issue filed on /try starts at step 2 with `user: "web:<hash>"`, where the hash is a daily-salted digest of the visitor's IP. It gets a reply on the page, never proposals.
