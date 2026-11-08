@@ -102,3 +102,14 @@ describe("guard handler: privacy and long inputs", () => {
     expect((await res.json()).result.valid).toBe(false);
   });
 });
+
+describe("guard handler: raw input for callers", () => {
+  it("passes the raw input_text (marker included) as onVerdict's second argument, and still strips it for scanning", async () => {
+    const seen: string[] = [];
+    const h = createGuardHandler({ token: TOKEN, chat: fakeChat, onVerdict: async (_l, raw) => void seen.push(raw) });
+    const text = "plain bug\n[porter-run 123e4567-e89b-42d3-a456-426614174000]";
+    const res = await h.validate(post({ profile: "prompt-injection", input_text: text }));
+    expect((await res.json()).result.valid).toBe(true);
+    expect(seen).toEqual([text]);
+  });
+});

@@ -9,7 +9,8 @@ export type GuardConfig = {
   token: string;
   chat: ChatFn;
   deadlineMs?: number;
-  onVerdict?: (v: GuardLog) => Promise<void>;
+  /** Second argument is the raw input_text, for callers that read a label from it (never stored by the package). */
+  onVerdict?: (v: GuardLog, rawInput: string) => Promise<void>;
 };
 
 const LOG_CAP_MS = 500;
@@ -88,7 +89,7 @@ export function createGuardHandler(cfg: GuardConfig) {
         };
         let timer: ReturnType<typeof setTimeout> | undefined;
         try {
-          await Promise.race([cfg.onVerdict(log), new Promise((r) => (timer = setTimeout(r, LOG_CAP_MS)))]);
+          await Promise.race([cfg.onVerdict(log, b.input_text), new Promise((r) => (timer = setTimeout(r, LOG_CAP_MS)))]);
         } catch {
           // logging must never change the verdict
         } finally {

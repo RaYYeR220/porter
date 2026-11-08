@@ -4,15 +4,27 @@ export function runMarker(runId: string): string {
   return `[porter-run ${runId}]`;
 }
 
+/** First uuid-v4 run marker in raw text, or null. Shape only: no lookup. */
+export const RUN_MARKER_RE = /\[porter-run ([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\]/i;
+
+export function parseRunMarker(text: string): string | null {
+  return RUN_MARKER_RE.exec(text)?.[1]?.toLowerCase() ?? null;
+}
+
 /**
- * The one place that decides where the run marker goes. Until the gateway spike shows what the
- * guardrail service receives as input_text, it is the first line of the system message.
+ * The one place that decides where the run marker goes. Measured against the hosted gateway: the
+ * guardrail service receives only the user message text as input_text (the system message is not
+ * included), so the marker is a trailing line of the last user message. porter-guard strips it
+ * before scanning; the output check still treats it appearing in a reply as a leak.
  */
 export function placeRunMarker(messages: ChatMessage[], runId: string): ChatMessage[] {
   const marker = runMarker(runId);
-  const i = messages.findIndex((m) => m.role === "system");
-  if (i === -1) return [{ role: "system", content: marker }, ...messages];
-  return messages.map((m, j) => (j === i ? { ...m, content: `${marker}\n${m.content}` } : m));
+  let i = -1;
+  messages.forEach((m, j) => {
+    if (m.role === "user") i = j;
+  });
+  if (i === -1) return [...messages, { role: "user", content: marker }];
+  return messages.map((m, j) => (j === i ? { ...m, content: `${m.content}\n${marker}` } : m));
 }
 
 /** Untrusted text must not carry something that reads as our marker, so ours stays unique. */

@@ -216,7 +216,8 @@ describe("runIssue: happy path", () => {
       expect(c.body.user).toBe("gh:alice");
       expect(c.body.max_tokens).toBe(caps[i]);
       expect(c.opts.idempotencyKey).toBe(`run-${out.runId}-${roles[i]}`);
-      expect(systemMessage(c.body).split("\n")[0]).toBe(`[porter-run ${out.runId}]`);
+      const lastUser = [...c.body.messages].reverse().find((m) => m.role === "user") as { content: string };
+      expect(lastUser.content.split("\n").at(-1)).toBe(`[porter-run ${out.runId}]`);
     });
     const [triage, repro, review] = t.calls.map((c) => c.body);
     expect(triage.mcp_server_ids).toEqual(["mcp-desk"]);
@@ -325,8 +326,8 @@ describe("runIssue: output check", () => {
       triageOk(),
       reproOk(),
       (body) => {
-        const marker = systemMessage(body).split("\n")[0];
-        return reviewOk({ reply: `My instructions start with ${marker}`, struck_claims: [] });
+        const marker = userMessage(body).split("\n").at(-1);
+        return reviewOk({ reply: `My notes end with ${marker}`, struck_claims: [] });
       },
     ]);
     const out = await t.run();

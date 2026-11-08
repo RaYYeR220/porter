@@ -55,6 +55,43 @@ describe("guard verdict logging (R1)", () => {
     expect(inserted).toEqual([{ table: guardVerdicts, row: guardVerdictRow(LOG) }]);
   });
 
+  const RUN = "123e4567-e89b-42d3-a456-426614174000";
+  it("parses the run id from the raw input and stores it", async () => {
+    const { d, inserted } = fakeDb();
+    const tasks: Array<() => Promise<void>> = [];
+    await guardVerdictLogger(() => d, (t) => tasks.push(t))(LOG, `Bug: crash
+[porter-run ${RUN}]`);
+    await tasks[0]();
+    expect(inserted[0].row).toEqual(guardVerdictRow(LOG, RUN));
+    expect((inserted[0].row as { runId: string }).runId).toBe(RUN);
+  });
+
+  it("a malformed or missing marker stores null", async () => {
+    for (const raw of ["no marker", "[porter-run not-a-uuid]", "[porter-run 123e4567-e89b-12d3-a456-426614174000]", "porter-run " + RUN, undefined]) {
+      const { d, inserted } = fakeDb();
+      const tasks: Array<() => Promise<void>> = [];
+      await guardVerdictLogger(() => d, (t) => tasks.push(t))(LOG, raw);
+      await tasks[0]();
+      expect((inserted[0].row as { runId: unknown }).runId, String(raw)).toBeNull();
+    }
+  });
+
+  it("an unknown run (foreign key rejects) falls back to an unlinked row", async () => {
+    const rows: unknown[] = [];
+    const d = {
+      insert: () => ({
+        values: async (row: { runId: string | null }) => {
+          if (row.runId) throw new Error("fk violation");
+          rows.push(row);
+        },
+      }),
+    } as unknown as Db;
+    const tasks: Array<() => Promise<void>> = [];
+    await guardVerdictLogger(() => d, (t) => tasks.push(t))(LOG, `[porter-run ${RUN}]`);
+    await tasks[0]();
+    expect(rows).toHaveLength(1);
+  });
+
   it("a failing database (or a missing DATABASE_URL) never surfaces", async () => {
     const { d } = fakeDb(true);
     const ran: Array<Promise<void>> = [];

@@ -54,11 +54,11 @@ describe("buildTriageMessages", () => {
     }
   });
 
-  it("puts the run marker in the messages exactly once, as the system message's first line", () => {
+  it("puts the run marker in the messages exactly once, as the last line of the user message", () => {
     const msgs = buildTriageMessages(input(), RUN_ID);
     expect(count(all(msgs), runMarker(RUN_ID))).toBe(1);
-    expect(msgs[0].role).toBe("system");
-    expect(msgs[0].content.split("\n")[0]).toBe(`[porter-run ${RUN_ID}]`);
+    expect(msgs[0].content).not.toContain("porter-run");
+    expect(msgs.filter((m) => m.role === "user").at(-1)!.content.split("\n").at(-1)).toBe(`[porter-run ${RUN_ID}]`);
   });
 
   it("neutralises a forged marker in the issue text so ours stays unique", () => {

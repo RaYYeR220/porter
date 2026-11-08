@@ -3,6 +3,7 @@ import { after } from "next/server";
 import type { GuardLog } from "porter-guard";
 import type { Db } from "../db/client";
 import { guardVerdicts, kv, proposals, runs, steps } from "../db/schema";
+import { parseRunMarker } from "./prompts";
 import { cut, pgJson, pgText } from "./text";
 
 /** One row per Otari call (failed ones included), plus Porter's own checks (output check, warnings). */
@@ -160,9 +161,9 @@ export function truncateToolCalls(calls: unknown, maxBytes = TOOL_CALLS_MAX_BYTE
   return [...kept, { type: "porter_truncated", dropped: calls.length - kept.length }];
 }
 
-export function guardVerdictRow(log: GuardLog) {
+export function guardVerdictRow(log: GuardLog, runId: string | null = null) {
   return {
-    runId: null,
+    runId,
     inputSha256: log.inputSha256,
     profile: log.profile,
     valid: log.valid,
@@ -192,9 +193,18 @@ export function afterResponse(task: () => Promise<void>): void {
 
 /** porter-guard's onVerdict hook: schedules a guard_verdicts insert and returns at once (ruling R1). */
 export function guardVerdictLogger(getDb: () => Db, schedule: (task: () => Promise<void>) => void = afterResponse) {
-  return async (log: GuardLog): Promise<void> => {
+  return async (log: GuardLog, rawInput?: string): Promise<void> => {
+    const runId = rawInput === undefined ? null : parseRunMarker(rawInput);
     schedule(async () => {
-      await getDb().insert(guardVerdicts).values(guardVerdictRow(log));
+      // The marker is only a label: a forged one can mislabel a row, never change a verdict. Its shape
+      // is checked, not its existence (no read on the hot path); if the run is unknown the foreign key
+      // rejects the insert and the row is stored unlinked instead.
+      try {
+        await getDb().insert(guardVerdicts).values(guardVerdictRow(log, runId));
+      } catch (e) {
+        if (runId === null) throw e;
+        await getDb().insert(guardVerdicts).values(guardVerdictRow(log, null));
+      }
     });
   };
 }
