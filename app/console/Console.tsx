@@ -2,17 +2,16 @@
 
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
-import { fetchRuns, noticeFor, type ApiFail } from "../../components/app/api";
+import { fetchProposals, fetchRun, fetchRuns, noticeFor, type ApiFail } from "../../components/app/api";
 import { AuthorsPanel } from "../../components/app/AuthorsPanel";
 import { ago, authorName, DASH, stamp, usd } from "../../components/app/format";
 import { Notice } from "../../components/app/Notice";
 import { ProposalRow } from "../../components/app/ProposalRow";
-import { FILTERS, holdKind, isTierDown, matchesFilter, modelName, servedModelOf, triageModel, type Filter } from "../../components/app/runs";
+import { FILTERS, isTierDown, matchesFilter, modelName, type Filter } from "../../components/app/runs";
 import { StatusBadge } from "../../components/app/StatusBadge";
-import type { Proposal, RunDetail, RunRow } from "../../components/app/types";
+import type { Proposal, RunRow } from "../../components/app/types";
 import { useNow } from "../../components/app/useNow";
 import { usePoll } from "../../components/app/usePoll";
-import { useRunDetails } from "../../components/app/useRunDetails";
 
 const PAGE = 50;
 const SHOWN = 20;
@@ -20,16 +19,14 @@ const REFRESH_MS = 15_000;
 
 const FILTER_LABEL: Record<Filter, string> = { all: "All", answered: "Answered", held: "Held", refused: "Refused", failed: "Failed" };
 
-function Scoreboard({ rows, details }: { rows: RunRow[]; details: Record<string, RunDetail> }) {
-  const held = rows.filter((r) => r.status === "held_guardrail");
-  const heldKnown = held.every((r) => details[r.id]);
-  const gateway = held.filter((r) => details[r.id] && holdKind(details[r.id]) === "gateway").length;
-  const output = held.filter((r) => details[r.id] && holdKind(details[r.id]) === "output").length;
+/** Counts over the runs loaded, straight from the list: the API says how each hold happened. */
+function Scoreboard({ rows }: { rows: RunRow[] }) {
+  const count = (pick: (r: RunRow) => boolean) => rows.filter(pick).length;
   const cells = [
-    { n: heldKnown ? gateway : null, label: "held at the gateway", tone: "hold" },
-    { n: heldKnown ? output : null, label: "held by the output check", tone: "hold" },
-    { n: rows.filter((r) => r.status === "refused_budget").length, label: "refused by budget", tone: "hold" },
-    { n: rows.filter((r) => r.status === "answered").length, label: "answered", tone: "ok" },
+    { n: count((r) => r.heldBy === "gateway"), label: "held at the gateway", tone: "hold" },
+    { n: count((r) => r.heldBy === "output"), label: "held by the output check", tone: "hold" },
+    { n: count((r) => r.status === "refused_budget"), label: "refused by budget", tone: "hold" },
+    { n: count((r) => r.status === "answered"), label: "answered", tone: "ok" },
   ];
   return (
     <section className="score" aria-labelledby="score-title">
@@ -40,7 +37,7 @@ function Scoreboard({ rows, details }: { rows: RunRow[]; details: Record<string,
         {cells.map((c) => (
           <div key={c.label} className={`score-cell score-${c.tone}`}>
             <dt>{c.label}</dt>
-            <dd>{c.n === null ? <span className="sk sk-fig" aria-label="counting" /> : c.n}</dd>
+            <dd>{c.n}</dd>
           </div>
         ))}
       </dl>
@@ -48,14 +45,15 @@ function Scoreboard({ rows, details }: { rows: RunRow[]; details: Record<string,
   );
 }
 
-function QueueRow({ row, detail, now }: { row: RunRow; detail: RunDetail | undefined; now: number }) {
+function QueueRow({ row, now }: { row: RunRow; now: number }) {
   // The triage model is the one an author's budget tier decides, so a tier-down shows here.
-  const model = detail ? (triageModel(detail.steps) ?? servedModelOf(detail.steps)) : null;
+  const model = row.servedModel ?? null;
+  const waiting = row.pendingProposals ?? 0;
   return (
     <tr>
       <td data-label="Status">
         <StatusBadge status={row.status} />
-        {detail?.reviewItem && <span className="q-review">needs review</span>}
+        {waiting > 0 && <span className="q-review">{waiting} waiting for approval</span>}
       </td>
       <th scope="row" data-label="Issue" className="q-title">
         <Link href={`/console/runs/${row.id}`}>{row.title?.trim() || "Untitled issue"}</Link>
@@ -69,13 +67,9 @@ function QueueRow({ row, detail, now }: { row: RunRow; detail: RunDetail | undef
       </th>
       <td data-label="Author">{authorName(row.authorExternalId)}</td>
       <td data-label="Model">
-        {detail ? (
-          <code className={isTierDown(model) ? "is-tier" : undefined} title={model ?? undefined}>
-            {modelName(model) ?? DASH}
-          </code>
-        ) : (
-          <span className="sk sk-text" aria-label="loading" />
-        )}
+        <code className={isTierDown(model) ? "is-tier" : undefined} title={model ?? undefined}>
+          {modelName(model) ?? DASH}
+        </code>
       </td>
       <td data-label="Cost">
         <code>{row.status === "running" ? DASH : usd(row.totalCostUsd)}</code>
@@ -87,6 +81,11 @@ function QueueRow({ row, detail, now }: { row: RunRow; detail: RunDetail | undef
   );
 }
 
+/**
+ * The maintainer's desk. A cold load is three reads: the runs list, the demo repository's pending
+ * proposals and the authors. A run's details are read only when someone opens it, or once after a
+ * decision here, to show what the maintainer key's tool call returned.
+ */
 export function Console() {
   const now = useNow();
   const [rows, setRows] = useState<RunRow[] | null>(null);
@@ -95,6 +94,8 @@ export function Console() {
   const [older, setOlder] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
   const [shown, setShown] = useState(SHOWN);
+  const [pending, setPending] = useState<Proposal[] | null>(null);
+  const [propErr, setPropErr] = useState<ApiFail | null>(null);
   const [decided, setDecided] = useState<Proposal[]>([]);
 
   const loadFirst = useCallback(async () => {
@@ -115,7 +116,18 @@ export function Console() {
     setCursor((c) => c ?? r.data.nextCursor);
   }, []);
 
-  usePoll(loadFirst, REFRESH_MS);
+  const loadProposals = useCallback(async () => {
+    const r = await fetchProposals();
+    if (r.ok) {
+      setPending(r.data.proposals ?? []);
+      setPropErr(null);
+    } else {
+      setPropErr(r);
+    }
+  }, []);
+
+  const loadAll = useCallback(() => Promise.all([loadFirst(), loadProposals()]), [loadFirst, loadProposals]);
+  usePoll(loadAll, REFRESH_MS);
 
   const loadOlder = async () => {
     if (!cursor) return;
@@ -137,30 +149,27 @@ export function Console() {
   const all = useMemo(() => rows ?? [], [rows]);
   const filtered = all.filter((r) => matchesFilter(r, filter));
   const visible = filtered.slice(0, shown);
-  // Details are read for what is on screen, for held runs (the scoreboard splits them) and for answered
-  // GitHub issues (the only runs whose proposals this console can approve).
-  const actionable = (r: RunRow) => r.source === "github" && r.status === "answered" && r.issueNumber !== null;
-  const needDetail = all.filter((r) => visible.includes(r) || r.status === "held_guardrail" || actionable(r));
-  const { details, invalidate } = useRunDetails(needDetail);
 
-  const stored = Object.values(details)
-    .filter((d) => d.run.source === "github")
-    .flatMap((d) => d.proposals);
-  const latest = (p: Proposal) => stored.find((x) => x.id === p.id && x.status !== "pending") ?? p;
-  const pending = stored.filter((p) => p.status === "pending" && !decided.some((x) => x.id === p.id));
-  // Decided here stays on screen with its outcome; the run is read again for the execution result.
-  const proposals = [...pending, ...decided.map(latest)].sort((a, b) => a.id - b.id);
+  // Decided here stays on screen with its outcome, newest first, above what is still waiting.
+  const proposals = [...decided, ...(pending ?? []).filter((p) => !decided.some((x) => x.id === p.id))];
 
-  const onDecided = (p: Proposal) => (_id: number, status: string) => {
-    if (status !== "unknown") setDecided((list) => [...list.filter((x) => x.id !== p.id), { ...p, status }]);
-    invalidate(p.runId);
+  const onDecided = (p: Proposal) => async (_id: number, status: string) => {
+    if (status === "unknown") {
+      // Someone else decided first: the next read of the list drops it.
+      void loadProposals();
+      return;
+    }
+    setDecided((list) => [{ ...p, status }, ...list.filter((x) => x.id !== p.id)]);
+    const r = await fetchRun(p.runId);
+    const stored = r.ok ? r.data.proposals.find((x) => x.id === p.id) : undefined;
+    if (stored) setDecided((list) => list.map((x) => (x.id === p.id ? { ...x, ...stored, title: p.title } : x)));
   };
 
   return (
     <>
       {loadErr && <Notice notice={noticeFor(loadErr, "read")} tone="warn" />}
 
-      {rows === null && !loadErr ? <div className="sk sk-score" aria-busy="true" /> : rows && <Scoreboard rows={all} details={details} />}
+      {rows === null && !loadErr ? <div className="sk sk-score" aria-busy="true" /> : rows && <Scoreboard rows={all} />}
 
       <div className="console-grid">
         <section className="panel queue" aria-labelledby="queue-title">
@@ -221,7 +230,7 @@ export function Console() {
                 </thead>
                 <tbody>
                   {visible.map((r) => (
-                    <QueueRow key={r.id} row={r} detail={details[r.id]} now={now} />
+                    <QueueRow key={r.id} row={r} now={now} />
                   ))}
                 </tbody>
               </table>
@@ -249,7 +258,9 @@ export function Console() {
             </h2>
           </div>
           <p className="panel-note">Labels and duplicate closes Porter proposed. Approving runs them with the maintainer key, not the stranger’s.</p>
-          {rows === null ? (
+          {propErr && pending === null ? (
+            <Notice notice={noticeFor(propErr, "read")} />
+          ) : pending === null ? (
             <div className="sk-rows" aria-busy="true">
               <div className="sk sk-row" />
             </div>

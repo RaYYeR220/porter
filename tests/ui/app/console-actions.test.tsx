@@ -134,6 +134,27 @@ describe("ProposalRow", () => {
     expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
   });
 
+  it("sends one decision however fast the button is pressed", async () => {
+    let release!: (r: Reply) => void;
+    const calls = stubFetch(
+      () => [],
+      () => new Promise<Reply>((r) => (release = r)),
+    );
+    render(
+      <ul>
+        <ProposalRow proposal={proposal} />
+      </ul>,
+    );
+    const approve = screen.getByRole("button", { name: "Approve" });
+    fireEvent.click(approve);
+    fireEvent.click(approve);
+    fireEvent.click(screen.getByRole("button", { name: "Reject" }));
+    expect(calls.filter((c) => c.method === "POST")).toHaveLength(1);
+    await act(async () => release({ status: 200, body: { ok: true, status: "executed" } }));
+    expect(await screen.findByText("Executed with the maintainer key")).toBeTruthy();
+    expect(calls.filter((c) => c.method === "POST")).toHaveLength(1);
+  });
+
   it("keeps the proposal pending with a calm notice when approval is rate limited", async () => {
     stubFetch(
       () => [],

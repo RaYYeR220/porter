@@ -12,6 +12,12 @@ export type RunRow = {
   totalCostUsd: number;
   createdAt: string;
   finishedAt: string | null;
+  /** List rows only: the model Otari served for the triage call. */
+  servedModel?: string | null;
+  /** List rows only: proposals of this run still waiting for a maintainer. */
+  pendingProposals?: number;
+  /** List rows only: for a held run, whether the gateway or the output check held it. */
+  heldBy?: "gateway" | "output" | null;
 };
 
 export type Step = {
@@ -50,10 +56,14 @@ export type Proposal = {
   action: string;
   args: Record<string, unknown> | null;
   status: string;
-  decidedBy: string | null;
+  decidedBy?: string | null;
   execution: unknown;
   createdAt: string;
   decidedAt: string | null;
+  /** From GET /api/proposals: the issue it belongs to. */
+  repo?: string;
+  issueNumber?: number | null;
+  title?: string | null;
 };
 
 export type RunDetail = {

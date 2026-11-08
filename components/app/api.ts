@@ -1,4 +1,4 @@
-import type { Author, RunDetail, RunsPage } from "./types";
+import type { Author, Proposal, RunDetail, RunsPage } from "./types";
 
 export type ApiOk<T> = { ok: true; status: number; data: T };
 export type ApiFail = { ok: false; status: number; error: string; reason: string | null };
@@ -41,6 +41,8 @@ export const fetchRuns = (q: { limit?: number; cursor?: string | null } = {}) =>
   return request<RunsPage>(`/api/runs?${p}`);
 };
 export const fetchAuthors = () => request<{ authors: Author[] }>("/api/authors");
+export const fetchProposals = (status = "pending") =>
+  request<{ proposals: Proposal[] }>(`/api/proposals?${new URLSearchParams({ status, limit: "50" })}`);
 export const submitTry = (body: { preset: string } | { title: string; body: string }) =>
   request<{ runId?: string; runIds?: string[] }>("/api/try", post(body));
 export const postAuthorAction = (id: string, action: string) =>

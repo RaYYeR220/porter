@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { noticeFor, postProposalDecision, type Notice as NoticeCopy } from "./api";
 import { Notice } from "./Notice";
 import type { Proposal } from "./types";
@@ -58,14 +58,19 @@ export function ProposalRow({
   const [status, setStatus] = useState(proposal.status);
   const [busy, setBusy] = useState<"approve" | "reject" | null>(null);
   const [notice, setNotice] = useState<NoticeCopy | null>(null);
+  // A second click before the first answer must not send a second decision.
+  const sending = useRef(false);
   const d = describeProposal(proposal);
   const current = proposal.status !== "pending" ? proposal.status : status;
   const result = executionText(proposal.execution);
 
   const decide = async (decision: "approve" | "reject") => {
+    if (sending.current) return;
+    sending.current = true;
     setBusy(decision);
     setNotice(null);
     const r = await postProposalDecision(proposal.id, decision);
+    sending.current = false;
     setBusy(null);
     if (r.ok) {
       const next = r.data?.status ?? (decision === "approve" ? "executed" : "rejected");
@@ -97,7 +102,7 @@ export function ProposalRow({
           {d.repo && <code>{d.repo}</code>}
           {showRun && (
             <Link href={`/console/runs/${proposal.runId}`} className="prop-run">
-              Run trace
+              {proposal.title?.trim() || "Run trace"}
             </Link>
           )}
         </p>
