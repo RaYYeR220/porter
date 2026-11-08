@@ -19,6 +19,7 @@
     "eval:render": "tsx scripts/render-results.ts",
     "shadow": "tsx --env-file=.env.local scripts/shadow.ts",
     "shadow:verify": "tsx --env-file=.env.local scripts/shadow-verify.ts",
+    "hero-data": "tsx --env-file=.env.local scripts/hero-data.ts",
     "fonts": "tsx scripts/fonts.ts"
   },
   "dependencies": {
