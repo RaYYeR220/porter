@@ -22,7 +22,7 @@ const schema = z.object({
   DEMO_REPO: required,
   DATABASE_URL: required,
   CRON_SECRET: required,
-  BALANCE_FLOOR_USD: z.string().min(1).default("3"),
+  BALANCE_FLOOR_USD: z.string().min(1).default("0.20"),
   IP_SALT: required,
 });
 

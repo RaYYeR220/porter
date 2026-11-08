@@ -118,11 +118,12 @@ describe("POST /api/try", () => {
     expect((await setup({ budget: { budgets_enforced: false, remaining_usd: null, limits: [] } }).post({ title: "hi" })).status).toBe(202);
   });
 
-  it("parseFloor defaults to 3", () => {
-    expect(parseFloor(undefined)).toBe(3);
-    expect(parseFloor("")).toBe(3);
-    expect(parseFloor("abc")).toBe(3);
+  it("parseFloor defaults to 0.20, below the desk workspace's daily ceiling", () => {
+    expect(parseFloor(undefined)).toBe(0.2);
+    expect(parseFloor("")).toBe(0.2);
+    expect(parseFloor("abc")).toBe(0.2);
     expect(parseFloor("5")).toBe(5);
+    expect(parseFloor("0")).toBe(0);
   });
 
   it("spam creates 12 runs for one end user and runs them in order", async () => {

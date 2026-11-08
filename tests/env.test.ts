@@ -69,6 +69,6 @@ describe("getEnv", () => {
     delete process.env.BALANCE_FLOOR_USD;
     const env = getEnv();
     expect(env.OTARI_BASE_URL).toBe("https://api.otari.ai/api/v1");
-    expect(env.BALANCE_FLOOR_USD).toBe("3");
+    expect(env.BALANCE_FLOOR_USD).toBe("0.20");
   });
 });

@@ -4,7 +4,8 @@ import type { KeyBudget } from "./otari/types";
 
 export const KEY_BUDGET_CACHE_KEY = "cache:key_budget";
 export const KEY_BUDGET_TTL_MS = 60_000;
-export const DEFAULT_FLOOR_USD = 3;
+/** Below the desk workspace's daily ceiling, which the strangers key's tightest limit can never exceed. */
+export const DEFAULT_FLOOR_USD = 0.2;
 
 export type FundsGate = { paused: false } | { paused: true; reason: "funds_low" };
 
@@ -16,7 +17,7 @@ export type FundsDeps = {
   now?: () => number;
 };
 
-/** Floor from BALANCE_FLOOR_USD; anything unusable falls back to the default of 3. */
+/** Floor from BALANCE_FLOOR_USD; anything unusable falls back to the default of 0.20. */
 export function parseFloor(raw: string | undefined): number {
   const n = Number(raw);
   return raw && raw.trim() !== "" && Number.isFinite(n) && n >= 0 ? n : DEFAULT_FLOOR_USD;
