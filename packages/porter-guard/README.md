@@ -86,7 +86,7 @@ On otari.ai this is done in the dashboard; an API key cannot create org-level gu
    - Endpoint: the service's **base URL**. Otari appends `/validate` itself, so enter `https://guard.example.org` for the standalone server, or `https://<host>/api/guard` for the route inside Porter. An endpoint that already ends in `/validate` makes Otari call `/validate/validate`, which answers 404, and every check fails as "guardrail profile could not be evaluated".
    - Credential: `GUARD_TOKEN`. Otari stores it write-only and sends it as `Authorization: Bearer <credential>`. Hosted Otari does not send a request-level guardrail `credential`, so an org-level guardrail is the way to authenticate the call.
    - Mode: Block. If unreachable: "Refuse the request".
-   - Runs in: the workspaces whose traffic should be screened (Porter: an org-level guardrail, mandated on workspace `desk`).
+   - Runs in: the workspaces whose traffic should be screened (Porter: `desk` only).
 3. Give the service an Otari key from a workspace where it is **not** mandated, so its own classifier calls are not screened by itself.
 
 Org-level guardrails are input-only: Otari screens what goes into a model call, not what comes out of it.

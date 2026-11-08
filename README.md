@@ -147,7 +147,7 @@ flowchart LR
   guard --> db
 ```
 
-Every arrow is wired in code and registered: the GitHub App is installed on the demo repository, the stored MCP server is connected, and porter-guard is an org-level guardrail, mandated on workspace `desk`. Which paths have carried live traffic is tracked in [JUDGES.md](JUDGES.md#what-is-live). Trust boundaries, data stores and a request walkthrough: [docs/architecture.md](docs/architecture.md).
+Every arrow is wired and registered; no issue has been answered end to end yet, because the org balance is unfunded. Only the guardrail hold path has carried live traffic (see [JUDGES.md](JUDGES.md#what-is-live)). Trust boundaries, data stores and a request walkthrough: [docs/architecture.md](docs/architecture.md).
 
 ## Run it yourself
 
