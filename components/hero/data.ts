@@ -27,7 +27,8 @@ export const heroData = heroJson as HeroData;
 /**
  * Facts the labels state. All are configuration, not measurements:
  * the porter-triage routing policy serves gpt-oss-120b and moves an author to gpt-oss-20b from 80% of
- * their budget; end-user budgets reset daily at UTC midnight; a gateway hold never reaches a model.
+ * their budget; end-user budgets reset daily at UTC midnight; a gateway hold never reaches the answering
+ * model, so it spends no answer tokens (the guard's own classifiers still run).
  */
 export const FACTS = {
   triageModel: "gpt-oss-120b",

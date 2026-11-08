@@ -64,7 +64,7 @@ describe("GlyphGate", () => {
     const drawn = canvas.texts.filter((t) => [...t].length > 1).join("\n");
     expect(drawn).toContain("gateway");
     expect(drawn).toMatch(/^held$/m);
-    expect(drawn).toMatch(/ · [a-z_]+ · 0 tokens/);
+    expect(drawn).toMatch(/ · [a-z_]+ · 0 answer tokens/);
     expect(drawn).toContain(" · answered · gpt-oss-120b");
     expect(drawn).not.toContain("$");
   });

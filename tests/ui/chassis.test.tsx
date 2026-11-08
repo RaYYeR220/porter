@@ -4,7 +4,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const path = vi.hoisted(() => ({ current: "/" }));
 vi.mock("next/navigation", () => ({ usePathname: () => path.current }));
+vi.mock("geist/font/mono", () => ({ GeistMono: { variable: "mono" } }));
 
+import { metadata } from "../../app/layout";
 import { Footer } from "../../components/site/Footer";
 import { Nav } from "../../components/site/Nav";
 import { REPO_URL, openIssueHref } from "../../components/site/links";
@@ -49,5 +51,16 @@ describe("openIssueHref", () => {
   });
   it("falls back to /try when unset or not an owner/repo name", () => {
     for (const v of [undefined, "", "   ", "porter", "a/b/c", "../evil", "https://evil.example/x"]) expect(openIssueHref(v)).toBe("/try");
+  });
+});
+
+describe("metadata", () => {
+  it("says every issue is screened, not that every attack is held", () => {
+    const texts = [metadata.description, metadata.openGraph?.description, metadata.twitter?.description];
+    for (const t of texts) {
+      expect(t).toMatch(/Every issue is screened at the gateway before the answering model sees it/);
+      expect(t).not.toMatch(/Attacks are held/);
+    }
+    expect(metadata.title).toMatchObject({ default: "Porter" });
   });
 });

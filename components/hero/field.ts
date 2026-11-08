@@ -171,8 +171,8 @@ export class GlyphField {
   }
   holdParts(h: { s: Seg }): Part[] {
     return this.mobile
-      ? [["held", "ice"], [" · 0 tokens", "ink2"]]
-      : [["held", "ice"], [` · ${h.s.atk?.signal ?? "injection"} · 0 tokens`, "ink2"]];
+      ? [["held", "ice"], [" · 0 answer tokens", "ink2"]]
+      : [["held", "ice"], [` · ${h.s.atk?.signal ?? "injection"} · 0 answer tokens`, "ink2"]];
   }
   burstParts(stage: number): Part[] {
     if (stage === 3) return [["refused", "ice"], [` · resets ${FACTS.resets}`, "ink2"]];

@@ -28,7 +28,8 @@
   font-size: var(--text-lead);
   line-height: 1.55;
   color: var(--ink-2);
-  max-width: 620px;
+  /* three lines at desktop sizes, so the field keeps its share of the first screen */
+  max-width: 700px;
   margin: 24px auto 0;
   text-wrap: pretty;
 }

@@ -12,8 +12,8 @@ const signals = heroData.attacks.map((a) => a.signal);
 const issueNumbers = new Set(heroData.issues.map(([n]) => `#${n}`));
 const ALLOWED = [
   /^gateway$/,
-  /^held · ([a-z_]+) · 0 tokens$/,
-  /^held · 0 tokens$/,
+  /^held · ([a-z_]+) · 0 answer tokens$/,
+  /^held · 0 answer tokens$/,
   /^(#\d+) · answered · gpt-oss-120b$/,
   /^one author · own daily budget$/,
   /^one author · ≥80% → gpt-oss-20b$/,
@@ -67,7 +67,7 @@ describe("hero field", () => {
       expect(t).not.toMatch(/\$/);
       const rule = ALLOWED.find((r) => r.test(t));
       expect(rule, t).toBeDefined();
-      const held = /^held · ([a-z_]+) · 0 tokens$/.exec(t);
+      const held = /^held · ([a-z_]+) · 0 answer tokens$/.exec(t);
       if (held) expect(signals).toContain(held[1]);
       const answered = /^(#\d+) · answered/.exec(t);
       if (answered) expect(issueNumbers.has(answered[1])).toBe(true);

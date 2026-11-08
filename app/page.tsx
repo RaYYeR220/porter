@@ -78,8 +78,9 @@ export default function Home() {
             A front desk strangers can’t talk their way past.
           </h1>
           <p className="sub enter d2">
-            Porter answers GitHub issues from strangers on open-weight models through Otari. Attacks are held at the gateway,
-            every author gets their own budget, and nothing gets labelled or closed until you approve it.
+            Porter answers GitHub issues from strangers on open-weight models through Otari. Every issue is screened at the
+            gateway before the answering model sees it, every author gets their own budget, and nothing gets labelled or closed
+            until you approve it.
           </p>
           <div className="ctas enter d3">
             <Cta className="btn btn-p" href={issueHref}>
@@ -162,9 +163,9 @@ export default function Home() {
                 <span className="n">01</span>
                 <h3>Hold</h3>
               </div>
-              <p>A caught issue stops at the line: it never reaches the answering model, costs its author nothing, and waits for a maintainer.</p>
+              <p>A caught issue stops at the line: it never reaches the answering model, spends nothing from its author’s budget, and waits for a maintainer.</p>
               <p className="data">
-                <b>held</b> · 0 tokens · Qwen3Guard · gpt-oss-safeguard
+                <b>held</b> · 0 answer tokens · screened by Qwen3Guard + gpt-oss-safeguard
                 <br />
                 hidden_html_comment · bidi_override · role_block
                 {figures && (

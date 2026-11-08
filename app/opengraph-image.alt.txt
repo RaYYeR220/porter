@@ -1,1 +1,1 @@
-Porter: a front desk strangers can’t talk their way past. Columns of real issue text rise to one gateway line; a hidden HTML comment is held there with "held · hidden_html_comment · 0 tokens".
+Porter: a front desk strangers can’t talk their way past. Columns of real issue text rise to one gateway line; a hidden HTML comment is held there with "held · hidden_html_comment · 0 answer tokens".

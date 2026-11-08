@@ -24,6 +24,11 @@ describe("landing page", () => {
     vi.stubEnv("NEXT_PUBLIC_DEMO_REPO", "");
     render(<Home />);
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("A front desk strangers can’t talk their way past.");
+    expect(screen.getByText(/^Porter answers GitHub issues/).textContent?.replace(/\s+/g, " ")).toBe(
+      "Porter answers GitHub issues from strangers on open-weight models through Otari. Every issue is screened at the " +
+        "gateway before the answering model sees it, every author gets their own budget, and nothing gets labelled or " +
+        "closed until you approve it.",
+    );
     expect(screen.getByRole("link", { name: /Open a test issue/ }).getAttribute("href")).toBe("/try");
     expect(screen.getByRole("link", { name: "Try it without an account" }).getAttribute("href")).toBe("/try");
     const proof = screen.getByText("Running on otari.ai").parentElement as HTMLElement;
@@ -43,6 +48,10 @@ describe("landing page", () => {
     render(<Home />);
     const how = screen.getByRole("region", { name: /Strangers can type anything/ });
     expect(within(how).getAllByRole("heading", { level: 3 }).map((h) => h.textContent)).toEqual(["Hold", "Answer", "Approve"]);
+    // a hold spends no answer tokens; the guard's own classifiers still run, and the page says so
+    expect(how.textContent).toContain("held · 0 answer tokens · screened by Qwen3Guard + gpt-oss-safeguard");
+    expect(how.textContent).toContain("spends nothing from its author’s budget");
+    expect(how.textContent).not.toMatch(/· 0 tokens/);
     const runs = screen.getByRole("region", { name: "What runs where" });
     const terms = [...runs.querySelectorAll("dt")].map((d) => d.textContent);
     expect(terms).toEqual([

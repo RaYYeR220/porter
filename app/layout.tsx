@@ -12,8 +12,9 @@ import "./globals.css";
 const SANS_PRELOAD = ["/fonts/GeneralSans-Medium.woff2", "/fonts/GeneralSans-Regular.woff2"];
 
 const DESCRIPTION =
-  "Porter answers GitHub issues from strangers on open-weight models through Otari. Attacks are held at the gateway, " +
-  "every author gets their own budget, and nothing gets labelled or closed until a maintainer approves it.";
+  "Porter answers GitHub issues from strangers on open-weight models through Otari. Every issue is screened at the gateway " +
+  "before the answering model sees it, every author gets their own budget, and nothing gets labelled or closed until a " +
+  "maintainer approves it.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
