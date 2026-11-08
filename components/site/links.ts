@@ -1,4 +1,8 @@
 export const REPO_URL = "https://github.com/RaYYeR220/porter";
+/** The branch the eval files and results are committed on. */
+export const REPO_BRANCH = "devs-wilding";
+/** A file in the repository on GitHub, e.g. repoFile("eval/PREREGISTRATION.md"). */
+export const repoFile = (path: string) => `${REPO_URL}/blob/${REPO_BRANCH}/${path.replace(/^\/+/, "")}`;
 
 /** The production origin, for absolute links in metadata. */
 export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://porter-frontdesk.vercel.app";

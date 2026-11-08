@@ -1,0 +1,165 @@
+{
+  "arm": "porter",
+  "n": 20,
+  "repo": "mozilla-ai/otari",
+  "updated_at": "2026-11-07T19:40:00.000Z",
+  "spammer": "eval:porter:spammer",
+  "legit_author": "eval:porter:legit",
+  "issues": [
+    {
+      "index": 1,
+      "status": "answered",
+      "cost_usd": 0.0058,
+      "cumulative_usd": 0.0058,
+      "run_id": "f1c7a0e0-0000-4000-8000-000000000065"
+    },
+    {
+      "index": 2,
+      "status": "answered",
+      "cost_usd": 0.0058,
+      "cumulative_usd": 0.0116,
+      "run_id": "f1c7a0e0-0000-4000-8000-000000000066"
+    },
+    {
+      "index": 3,
+      "status": "answered",
+      "cost_usd": 0.0058,
+      "cumulative_usd": 0.0174,
+      "run_id": "f1c7a0e0-0000-4000-8000-000000000067"
+    },
+    {
+      "index": 4,
+      "status": "answered",
+      "cost_usd": 0.0058,
+      "cumulative_usd": 0.0232,
+      "run_id": "f1c7a0e0-0000-4000-8000-000000000068"
+    },
+    {
+      "index": 5,
+      "status": "answered",
+      "cost_usd": 0.0058,
+      "cumulative_usd": 0.028999999999999998,
+      "run_id": "f1c7a0e0-0000-4000-8000-000000000069"
+    },
+    {
+      "index": 6,
+      "status": "answered",
+      "cost_usd": 0.0058,
+      "cumulative_usd": 0.0348,
+      "run_id": "f1c7a0e0-0000-4000-8000-00000000006a"
+    },
+    {
+      "index": 7,
+      "status": "answered",
+      "cost_usd": 0.0058,
+      "cumulative_usd": 0.0406,
+      "run_id": "f1c7a0e0-0000-4000-8000-00000000006b"
+    },
+    {
+      "index": 8,
+      "status": "answered",
+      "cost_usd": 0.0011,
+      "cumulative_usd": 0.041699999999999994,
+      "run_id": "f1c7a0e0-0000-4000-8000-00000000006c"
+    },
+    {
+      "index": 9,
+      "status": "answered",
+      "cost_usd": 0.0011,
+      "cumulative_usd": 0.04279999999999999,
+      "run_id": "f1c7a0e0-0000-4000-8000-00000000006d"
+    },
+    {
+      "index": 10,
+      "status": "refused_budget",
+      "cost_usd": 0,
+      "cumulative_usd": 0.04279999999999999,
+      "run_id": "f1c7a0e0-0000-4000-8000-00000000006e"
+    },
+    {
+      "index": 11,
+      "status": "refused_budget",
+      "cost_usd": 0,
+      "cumulative_usd": 0.04279999999999999,
+      "run_id": "f1c7a0e0-0000-4000-8000-00000000006f"
+    },
+    {
+      "index": 12,
+      "status": "refused_budget",
+      "cost_usd": 0,
+      "cumulative_usd": 0.04279999999999999,
+      "run_id": "f1c7a0e0-0000-4000-8000-000000000070"
+    },
+    {
+      "index": 13,
+      "status": "refused_budget",
+      "cost_usd": 0,
+      "cumulative_usd": 0.04279999999999999,
+      "run_id": "f1c7a0e0-0000-4000-8000-000000000071"
+    },
+    {
+      "index": 14,
+      "status": "refused_budget",
+      "cost_usd": 0,
+      "cumulative_usd": 0.04279999999999999,
+      "run_id": "f1c7a0e0-0000-4000-8000-000000000072"
+    },
+    {
+      "index": 15,
+      "status": "refused_budget",
+      "cost_usd": 0,
+      "cumulative_usd": 0.04279999999999999,
+      "run_id": "f1c7a0e0-0000-4000-8000-000000000073"
+    },
+    {
+      "index": 16,
+      "status": "refused_budget",
+      "cost_usd": 0,
+      "cumulative_usd": 0.04279999999999999,
+      "run_id": "f1c7a0e0-0000-4000-8000-000000000074"
+    },
+    {
+      "index": 17,
+      "status": "refused_budget",
+      "cost_usd": 0,
+      "cumulative_usd": 0.04279999999999999,
+      "run_id": "f1c7a0e0-0000-4000-8000-000000000075"
+    },
+    {
+      "index": 18,
+      "status": "refused_budget",
+      "cost_usd": 0,
+      "cumulative_usd": 0.04279999999999999,
+      "run_id": "f1c7a0e0-0000-4000-8000-000000000076"
+    },
+    {
+      "index": 19,
+      "status": "refused_budget",
+      "cost_usd": 0,
+      "cumulative_usd": 0.04279999999999999,
+      "run_id": "f1c7a0e0-0000-4000-8000-000000000077"
+    },
+    {
+      "index": 20,
+      "status": "refused_budget",
+      "cost_usd": 0,
+      "cumulative_usd": 0.04279999999999999,
+      "run_id": "f1c7a0e0-0000-4000-8000-000000000078"
+    }
+  ],
+  "total_cost_usd": 0.04889999999999999,
+  "first_refusal_index": 10,
+  "legit": {
+    "status": "answered",
+    "served": true,
+    "cost_usd": 0.0061,
+    "run_id": "f1c7a0e0-0000-4000-8000-000000000079"
+  },
+  "stopped": null,
+  "modeled": {
+    "modeled": true,
+    "n": 100,
+    "cost_usd": 0.04279999999999999,
+    "formula": "a refused call bills $0, so cost(100) = cumulative cost before the first refusal (issue 9) = $0.0428"
+  }
+}

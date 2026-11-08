@@ -1,0 +1,240 @@
+{
+  "sampledAt": "2026-11-07T21:05:00.000Z",
+  "seed": "porter-shadow-v1",
+  "sample": 8,
+  "addedIds": [],
+  "snapshotAt": "2026-11-05T09:12:00.000Z",
+  "issues": [
+    {
+      "number": 3011,
+      "title": "Streaming chat completions drop the final usage chunk behind a proxy",
+      "url": "https://github.com/mozilla-ai/otari/issues/3011",
+      "runId": "f1c7a0e0-0000-4000-8000-00000000008f",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-07T21:05:00.000Z"
+      },
+      "status": "answered",
+      "costUsd": 0.0063,
+      "latencyMs": 9000,
+      "kind": "bug",
+      "summary": null,
+      "duplicates": [
+        {
+          "number": 2894,
+          "title": "Usage block missing from streamed responses",
+          "why": "Same missing usage chunk on streamed calls, same endpoint.",
+          "inSnapshot": true,
+          "verified": true
+        }
+      ],
+      "fixed_in": null,
+      "missing_info": [
+        "Proxy software and version",
+        "Whether stream_options.include_usage was set"
+      ],
+      "labels": [
+        "bug",
+        "area/streaming"
+      ]
+    },
+    {
+      "number": 3006,
+      "title": "Budget reset time is shown in local time on the dashboard",
+      "url": "https://github.com/mozilla-ai/otari/issues/3006",
+      "runId": "f1c7a0e0-0000-4000-8000-000000000090",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-07T21:05:00.000Z"
+      },
+      "status": "answered",
+      "costUsd": 0.0049,
+      "latencyMs": 9000,
+      "kind": "bug",
+      "summary": null,
+      "duplicates": [],
+      "fixed_in": {
+        "version": "v0.14.2",
+        "evidence_url": "https://github.com/mozilla-ai/otari/releases/tag/v0.14.2",
+        "verified": null
+      },
+      "missing_info": [],
+      "labels": [
+        "bug",
+        "area/dashboard"
+      ]
+    },
+    {
+      "number": 2998,
+      "title": "Allow per-key model allowlists",
+      "url": "https://github.com/mozilla-ai/otari/issues/2998",
+      "runId": "f1c7a0e0-0000-4000-8000-000000000091",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-07T21:05:00.000Z"
+      },
+      "status": "answered",
+      "costUsd": 0.0052,
+      "latencyMs": 9000,
+      "kind": "feature",
+      "summary": null,
+      "duplicates": [
+        {
+          "number": 2410,
+          "title": "Restrict which models a key can call",
+          "why": "Asks for the same per-key restriction.",
+          "inSnapshot": true,
+          "verified": null
+        },
+        {
+          "number": 1187,
+          "title": "Model ACLs",
+          "why": "Older request for model-level access control.",
+          "inSnapshot": false,
+          "verified": null
+        }
+      ],
+      "fixed_in": null,
+      "missing_info": [],
+      "labels": [
+        "enhancement"
+      ]
+    },
+    {
+      "number": 2987,
+      "title": "Docs: guardrail mandate example uses an old field name",
+      "url": "https://github.com/mozilla-ai/otari/issues/2987",
+      "runId": "f1c7a0e0-0000-4000-8000-000000000092",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-07T21:05:00.000Z"
+      },
+      "status": "answered",
+      "costUsd": 0.0038,
+      "latencyMs": 9000,
+      "kind": "docs",
+      "summary": null,
+      "duplicates": [
+        {
+          "number": 2702,
+          "title": "Guardrail docs out of date",
+          "why": "Both report stale guardrail field names.",
+          "inSnapshot": true,
+          "verified": false
+        }
+      ],
+      "fixed_in": null,
+      "missing_info": [],
+      "labels": [
+        "documentation"
+      ]
+    },
+    {
+      "number": 2979,
+      "title": "Rerank endpoint returns 500 for an empty documents list",
+      "url": "https://github.com/mozilla-ai/otari/issues/2979",
+      "runId": "f1c7a0e0-0000-4000-8000-000000000093",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-07T21:05:00.000Z"
+      },
+      "status": "answered",
+      "costUsd": 0.0057,
+      "latencyMs": 9000,
+      "kind": "bug",
+      "summary": null,
+      "duplicates": [],
+      "fixed_in": {
+        "version": "v0.13.0",
+        "evidence_url": "https://github.com/mozilla-ai/otari/releases/tag/v0.13.0",
+        "verified": true
+      },
+      "missing_info": [
+        "The request body that triggers the 500"
+      ],
+      "labels": [
+        "bug",
+        "area/api"
+      ]
+    },
+    {
+      "number": 2971,
+      "title": "Question about self-hosting behind an existing gateway",
+      "url": "https://github.com/mozilla-ai/otari/issues/2971",
+      "runId": "f1c7a0e0-0000-4000-8000-000000000094",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-07T21:05:00.000Z"
+      },
+      "status": "held_guardrail",
+      "costUsd": 0,
+      "latencyMs": 9000,
+      "kind": null,
+      "summary": null,
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [],
+      "labels": []
+    },
+    {
+      "number": 2412,
+      "title": "Add retries with backoff to the Python client",
+      "url": "https://github.com/mozilla-ai/otari/issues/2412",
+      "runId": "f1c7a0e0-0000-4000-8000-000000000095",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-07T21:05:00.000Z"
+      },
+      "status": "answered",
+      "costUsd": 0.0044,
+      "latencyMs": 9000,
+      "kind": "feature",
+      "summary": null,
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [
+        "Which client version is in use"
+      ],
+      "labels": [
+        "enhancement",
+        "area/sdk"
+      ]
+    },
+    {
+      "number": 1903,
+      "title": "Embeddings call times out for long inputs",
+      "url": "https://github.com/mozilla-ai/otari/issues/1903",
+      "runId": "f1c7a0e0-0000-4000-8000-000000000096",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-07T21:05:00.000Z"
+      },
+      "status": "failed",
+      "costUsd": 0,
+      "latencyMs": 9000,
+      "kind": null,
+      "summary": null,
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [],
+      "labels": []
+    }
+  ],
+  "totals": {
+    "answered": 6,
+    "held": 1,
+    "refused": 0,
+    "failed": 1,
+    "costUsd": 0.0303,
+    "duplicatesClaimed": 4,
+    "fixedInClaimed": 2
+  }
+}
