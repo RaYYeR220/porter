@@ -1,4 +1,6 @@
-.superpowers/
+# Dot-directories at the root hold local tool, editor and notes state; only CI config is tracked
+/.*/
+!/.github/
 .env*
 !.env.example
 node_modules
@@ -10,15 +12,11 @@ SHIP-STATE.md
 BRIEF.md
 design*.md
 plan*.md
-docs/superpowers/
-.claude/
-.remember/
 ui-prototypes/
 variants/
 mockups/
 *-internal/
 AGENTS.md
-CLAUDE.md
 
 # General Sans is fetched at build time (Fontshare licence: self-host, do not redistribute)
 public/fonts/*.woff2
