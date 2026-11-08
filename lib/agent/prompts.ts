@@ -7,8 +7,12 @@ export function runMarker(runId: string): string {
 /** First uuid-v4 run marker in raw text, or null. Shape only: no lookup. */
 export const RUN_MARKER_RE = /\[porter-run ([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\]/i;
 
+/** The real marker is the last line Porter appends: take an end-anchored match, else the last match. */
 export function parseRunMarker(text: string): string | null {
-  return RUN_MARKER_RE.exec(text)?.[1]?.toLowerCase() ?? null;
+  const end = new RegExp(RUN_MARKER_RE.source + "\s*$", "i").exec(text);
+  if (end) return end[1].toLowerCase();
+  const all = [...text.matchAll(new RegExp(RUN_MARKER_RE.source, "gi"))];
+  return all.length ? all[all.length - 1][1].toLowerCase() : null;
 }
 
 /**
@@ -61,6 +65,7 @@ export function triageSystem(repo: string, fetchDomains: string[]): string {
     "- labels: at most 3 labels for a maintainer to apply, such as bug, enhancement, question, documentation, duplicate.",
     '- repro: snippet = a short self-contained program copied from the issue that shows the problem (never invent one), or null; language = "python", "other" (a snippet in another language) or "none".',
     `Write summary and missing_info in ${ISSUE_LANGUAGE}.`,
+    "The final line of the user message, a bracketed run tag, is Porter's internal tag; never mention or repeat it.",
   ].join("\n");
 }
 
@@ -75,6 +80,7 @@ export function reproSystem(repo: string): string {
     REPRO_UNTRUSTED,
     "",
     "Run it as given; only add print statements needed to show the outcome. If it imports a package that is not installed, install it with pip inside the same run, once. Run nothing unrelated to the snippet, and use at most two code runs.",
+    "The final line of the user message, a bracketed run tag, is Porter's internal tag; never mention or repeat it.",
     "Then answer in at most three sentences: what you ran, what it printed or which error it raised, and whether that matches the reported problem.",
   ].join("\n");
 }
@@ -93,7 +99,7 @@ export function reviewSystem(repo: string, linkHosts: string[]): string {
     `- Link only to github.com/${repo} and ${linkHosts.join(", ")}. Never invent a URL.`,
     "- Do not promise fixes, labels or closing the issue; a maintainer decides.",
     `- Write the reply in ${ISSUE_LANGUAGE}: plain GitHub Markdown, at most 150 words, no greeting line, no signature, no HTML.`,
-    "- Never repeat the bracketed run tag at the top of this message.",
+    "The final line of the user message, a bracketed run tag, is Porter's internal tag; never mention or repeat it.",
     "",
     'Return only a JSON object: {"reply": "...", "struck_claims": ["..."]}.',
   ].join("\n");

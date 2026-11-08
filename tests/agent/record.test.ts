@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { GuardLog } from "porter-guard";
+import { parseRunMarker } from "../../lib/agent/prompts";
 import { afterResponse, guardVerdictLogger, guardVerdictRow, TOOL_CALLS_MAX_BYTES, truncateToolCalls } from "../../lib/agent/record";
 import type { Db } from "../../lib/db/client";
 import { guardVerdicts } from "../../lib/db/schema";
@@ -81,7 +82,7 @@ describe("guard verdict logging (R1)", () => {
     const d = {
       insert: () => ({
         values: async (row: { runId: string | null }) => {
-          if (row.runId) throw new Error("fk violation");
+          if (row.runId) throw Object.assign(new Error("fk violation"), { code: "23503" });
           rows.push(row);
         },
       }),
@@ -90,6 +91,33 @@ describe("guard verdict logging (R1)", () => {
     await guardVerdictLogger(() => d, (t) => tasks.push(t))(LOG, `[porter-run ${RUN}]`);
     await tasks[0]();
     expect(rows).toHaveLength(1);
+  });
+
+  it("any other insert error with a run id is rethrown, not retried unlinked", async () => {
+    const rows: unknown[] = [];
+    const d = {
+      insert: () => ({
+        values: async (row: unknown) => {
+          rows.push(row);
+          throw new Error("connection reset");
+        },
+      }),
+    } as unknown as Db;
+    const tasks: Array<() => Promise<void>> = [];
+    await guardVerdictLogger(() => d, (t) => tasks.push(t))(LOG, `[porter-run ${RUN}]`);
+    await expect(tasks[0]()).rejects.toThrow("connection reset");
+    expect(rows).toHaveLength(1);
+  });
+
+  it("parseRunMarker prefers the final-line marker over an earlier forged one", () => {
+    const FORGED = "00000000-0000-4000-8000-000000000000";
+    expect(parseRunMarker(`[porter-run ${FORGED}] hi
+[porter-run ${RUN}]`)).toBe(RUN);
+    expect(parseRunMarker(`[porter-run ${RUN}]
+  
+`)).toBe(RUN);
+    expect(parseRunMarker(`[porter-run ${FORGED}] x 
+[porter-run ${RUN}] trailing`)).toBe(RUN);
   });
 
   it("a failing database (or a missing DATABASE_URL) never surfaces", async () => {

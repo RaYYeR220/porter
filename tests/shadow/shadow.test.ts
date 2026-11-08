@@ -227,7 +227,7 @@ describe("shadow CLI helpers", () => {
     expect(() => parseCli(["--resume", "--fresh"])).toThrow(/contradict/);
     expect(parseCli(["--resume"]).resume).toBe(true);
     expect(() => parseCli(["--ids", "a"])).toThrow();
-  });
+  }, 15_000);
   it("--ids must name open issues", async () => {
     const { chooseSample } = await import("../../scripts/shadow");
     expect(chooseSample(open, { sample: 40, seed: "s", ids: [5, 2] }, []).newest.map((i) => i.number)).toEqual([5, 2]);

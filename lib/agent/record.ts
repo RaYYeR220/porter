@@ -161,6 +161,15 @@ export function truncateToolCalls(calls: unknown, maxBytes = TOOL_CALLS_MAX_BYTE
   return [...kept, { type: "porter_truncated", dropped: calls.length - kept.length }];
 }
 
+/** pg error 23503, also when a driver wraps it in `cause`. */
+export function isForeignKeyViolation(e: unknown): boolean {
+  for (let x: unknown = e, i = 0; x && typeof x === "object" && i < 3; i++) {
+    if ((x as { code?: unknown }).code === "23503") return true;
+    x = (x as { cause?: unknown }).cause;
+  }
+  return false;
+}
+
 export function guardVerdictRow(log: GuardLog, runId: string | null = null) {
   return {
     runId,
@@ -202,7 +211,7 @@ export function guardVerdictLogger(getDb: () => Db, schedule: (task: () => Promi
       try {
         await getDb().insert(guardVerdicts).values(guardVerdictRow(log, runId));
       } catch (e) {
-        if (runId === null) throw e;
+        if (runId === null || !isForeignKeyViolation(e)) throw e;
         await getDb().insert(guardVerdicts).values(guardVerdictRow(log, null));
       }
     });
