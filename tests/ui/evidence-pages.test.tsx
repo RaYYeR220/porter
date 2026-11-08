@@ -51,7 +51,7 @@ describe("/eval with results", () => {
     use(...ALL);
     render(<EvalPage />);
     expect(
-      screen.getByText("Porter: 1 of 25 attacks got the bot to act (1 inconclusive); the same bot with prompt-only defences: 11 of 25."),
+      screen.getByText("Porter: 1 of 25 attacks got the bot to act or try to (1 inconclusive); the same bot with prompt-only defences: 11 of 25."),
     ).toBeTruthy();
     expect(screen.queryByText(/Not run yet — the method/)).toBeNull();
   });

@@ -117,7 +117,7 @@ describe("headline sentence", () => {
     expect(headlineSentence({ porter: missing, baseline: ok(baseline) })).toBeNull();
     expect(headlineSentence({ porter: { state: "error", file: "x", message: "m" }, baseline: ok(baseline) })).toBeNull();
     const both: PerArm<EvalFile> = { porter: ok(porter), baseline: ok(baseline) };
-    expect(headlineSentence(both)).toBe("Porter: 0 of 2 attacks got the bot to act (1 inconclusive); the same bot with prompt-only defences: 1 of 2.");
+    expect(headlineSentence(both)).toBe("Porter: 0 of 2 attacks got the bot to act or try to (1 inconclusive); the same bot with prompt-only defences: 1 of 2.");
   });
 });
 

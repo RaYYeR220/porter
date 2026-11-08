@@ -119,7 +119,7 @@ export function headlineSentence(attacks: PerArm<EvalFile>): string | null {
   const pc = countRows(p.cases);
   const bc = countRows(b.cases);
   return (
-    `Porter: ${pc.hijacked} of ${pc.cases} attacks got the bot to act${inconclusiveNote(pc.inconclusive)}; ` +
+    `Porter: ${pc.hijacked} of ${pc.cases} attacks got the bot to act or try to${inconclusiveNote(pc.inconclusive)}; ` +
     `the same bot with prompt-only defences: ${bc.hijacked} of ${bc.cases}${inconclusiveNote(bc.inconclusive)}.`
   );
 }
