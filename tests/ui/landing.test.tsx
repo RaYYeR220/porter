@@ -63,6 +63,12 @@ describe("landing page", () => {
       "Routing with fallback",
       "Open-weight models, one job each",
     ]);
+    // the reviewer writes the reply, and the guard runs three classifiers (two for injection, one for harm)
+    const models = [...runs.querySelectorAll("dd")].at(-1)?.textContent ?? "";
+    expect(models).toContain(
+      "One model triages, another writes the reply from the evidence, one reproduces bugs, three screen the input (two for injection, one for harm) and one finds duplicates.",
+    );
+    expect(models).not.toMatch(/two check the input/);
     // the "How it works" link in the nav lands here
     expect(document.getElementById("how")).toBe(how);
   });

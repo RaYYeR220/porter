@@ -43,7 +43,7 @@ const RUNS: Array<{ name: string; what: string; ids: string }> = [
   },
   {
     name: "Open-weight models, one job each",
-    what: "One model answers, another reviews the draft, one reproduces bugs, two check the input and one finds duplicates.",
+    what: "One model triages, another writes the reply from the evidence, one reproduces bugs, three screen the input (two for injection, one for harm) and one finds duplicates.",
     ids: "gpt-oss-120b · GLM-5.3-Flash · Qwen3-Coder · Qwen3Guard · gpt-oss-safeguard · Llama Guard 4 · Qwen3-Embedding",
   },
 ];
