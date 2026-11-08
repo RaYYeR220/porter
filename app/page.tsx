@@ -33,7 +33,7 @@ const RUNS: Array<{ name: string; what: string; ids: string }> = [
   },
   {
     name: "Web fetch",
-    what: "Porter can read up to two linked pages per issue, only from hosts on an allowlist.",
+    what: "While it triages, Porter can read linked pages, only from hosts its Otari workspace allows.",
     ids: "otari_web_fetch",
   },
   {

@@ -2,7 +2,11 @@ import { z } from "zod";
 import attacksJson from "./corpus/attacks.json";
 import benignJson from "./corpus/benign.json";
 
-/** Where the indirect-injection pages are served; allowed for the triage fetch only. */
+/**
+ * Where the indirect-injection pages are served. Named in the eval's triage prompt (never in a reply-link
+ * allowlist). Hosted Otari takes no fetch settings on the request, so whether it can really be fetched is
+ * the desk and baseline workspaces' web-fetch policy (README, Otari org setup, step 8).
+ */
 export const FIXTURE_HOST = "porter-frontdesk.vercel.app";
 
 export const TECHNIQUES = [

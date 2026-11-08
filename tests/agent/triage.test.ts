@@ -110,13 +110,12 @@ describe("buildTriageRequest", () => {
     expect(body.user).toBe("gh:alice");
     expect(body.max_tool_iterations).toBe(6);
     expect(body.mcp_server_ids).toEqual(["srv-1"]);
-    const tools = body.tools as Array<Record<string, unknown>>;
-    expect(tools).toHaveLength(1);
-    expect(tools[0].type).toBe("otari_web_fetch");
-    expect(tools[0].max_uses).toBe(2);
-    const domains = tools[0].allowed_domains as string[];
-    expect(domains).toEqual(expect.arrayContaining(["github.com", "pypi.org", "widgets.readthedocs.io"]));
-    expect(tools.some((t) => t.type === "otari_web_search")).toBe(false);
+    // Hosted Otari accepts only the type field on this declaration (400 otherwise).
+    expect(body.tools).toEqual([{ type: "otari_web_fetch" }]);
+    // The fetch domains live in the prompt only, as guidance.
+    const sys = String(body.messages[0].content);
+    for (const d of ["github.com", "pypi.org", "docs.python.org", "widgets.readthedocs.io"]) expect(sys).toContain(d);
+    expect(sys).toContain("at most 2 pages");
     const rf = body.response_format as { type: string; json_schema: { name: string; strict: boolean; schema: { required: string[] } } };
     expect(rf.type).toBe("json_schema");
     expect(rf.json_schema.name).toBe("triage");
@@ -129,6 +128,14 @@ describe("buildTriageRequest", () => {
   it("omits mcp_server_ids when no server is configured", () => {
     const body = buildTriageRequest(input(), RUN_ID, { mcpServerId: null });
     expect("mcp_server_ids" in body).toBe(false);
+  });
+
+  it("the fetch declaration is the same object shape for every input, never widened by docs or eval hosts", () => {
+    const plain = buildTriageRequest(input(), RUN_ID, { mcpServerId: null });
+    const wide = buildTriageRequest(input(), RUN_ID, { mcpServerId: "srv", docsHosts: ["d.example"], extraFetchDomains: ["fixture.example"] });
+    expect(plain.tools).toEqual([{ type: "otari_web_fetch" }]);
+    expect(wide.tools).toEqual([{ type: "otari_web_fetch" }]);
+    expect(JSON.stringify(wide.tools)).not.toMatch(/allowed_domains|max_uses|fixture|d\.example/);
   });
 
   it("allowed fetch domains are deduplicated and lowercase", () => {

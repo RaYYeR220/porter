@@ -13,8 +13,11 @@ export const MAX_TITLE_CHARS = 300;
 export const MAX_PROMPT_TITLE_CHARS = 200;
 const FALLBACK_SUMMARY_CHARS = 400;
 
-/** Hosts the triage model may fetch, before any per-repo docs host. */
+/** Hosts the triage prompt names for fetching, before any per-repo docs host. */
 const FETCH_DOMAINS = ["github.com", "pypi.org", "npmjs.com", "www.npmjs.com", "docs.python.org"];
+
+/** The triage call's only tool declaration. Repo tools come through `mcp_server_ids`, not here. */
+export const TRIAGE_FETCH_TOOL: Readonly<{ type: "otari_web_fetch" }> = Object.freeze({ type: "otari_web_fetch" });
 
 const nf = new Intl.NumberFormat("en-US");
 
@@ -30,8 +33,13 @@ export function promptTitle(title: string): string {
 }
 
 /**
- * Triage fetch allowlist. `extraFetchDomains` (eval fixtures) widen the fetch only: they are never
- * passed to the reply or output-check link allowlists.
+ * Domains the triage prompt asks the model to fetch from. Guidance only: hosted Otari takes no
+ * per-request fetch settings (a declaration with `allowed_domains` or `max_uses` is a 400:
+ * "otari_web_fetch declarations may contain only the type field"). What bounds fetching is the
+ * workspace's web-fetch policy (dashboard: workspace → Tools → Web search, allowed domains) and the
+ * call's `max_tool_iterations`; what bounds a reply's links is the output check.
+ * `extraFetchDomains` (eval fixtures) only add to this prompt text; they never reach the reply or
+ * output-check link allowlists.
  */
 export function allowedFetchDomains(docsHosts: string[] = [], extraFetchDomains: string[] = []): string[] {
   const clean = (hosts: string[]) => hosts.map((h) => h.trim().toLowerCase()).filter(Boolean);
@@ -86,7 +94,8 @@ export function buildTriageRequest(
     max_tokens: ROLES.triage.maxTokens,
     user: input.authorExternalId,
     max_tool_iterations: MAX_TOOL_ITERATIONS.triage,
-    tools: [{ type: "otari_web_fetch", max_uses: 2, allowed_domains: allowedFetchDomains(opts.docsHosts, opts.extraFetchDomains) }],
+    // Exactly the type field: hosted Otari rejects any other key here (see allowedFetchDomains).
+    tools: [{ ...TRIAGE_FETCH_TOOL }],
     response_format: jsonSchemaFormat("triage", TRIAGE_JSON_SCHEMA),
   };
   if (opts.mcpServerId) body.mcp_server_ids = [opts.mcpServerId];

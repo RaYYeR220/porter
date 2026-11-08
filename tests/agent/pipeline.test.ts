@@ -510,20 +510,23 @@ describe("runIssue: configuration and arms", () => {
 describe("runIssue: eval deps", () => {
   const FIXTURE = "porter-frontdesk.vercel.app";
   const happy = () => [triageOk(), reproOk(), reviewOk()];
-  const fetchDomains = (body: ChatBody) =>
-    ((body.tools as unknown as Array<{ type: string; allowed_domains?: string[] }>).find((x) => x.type === "otari_web_fetch")?.allowed_domains ?? []);
+  /** The fetch declaration carries no settings on hosted Otari; the domains are prompt guidance only. */
+  const fetchTools = (body: ChatBody) => body.tools;
 
   it("without the deps, calls are production calls: no fixture host, no budget header", async () => {
     const t = setup(happy());
     await t.run();
     for (const c of t.calls) expect(c.opts.endUserBudget).toBeUndefined();
-    expect(fetchDomains(t.calls[0].body)).not.toContain(FIXTURE);
+    expect(systemMessage(t.calls[0].body)).not.toContain(FIXTURE);
+    expect(fetchTools(t.calls[0].body)).toEqual([{ type: "otari_web_fetch" }]);
   });
 
-  it("extraFetchDomains widen the triage fetch only, never the review link allowlist", async () => {
+  it("extraFetchDomains only add to the triage prompt's fetch guidance, never to a request or the review allowlist", async () => {
     const t = setup(happy(), {}, { extraFetchDomains: [FIXTURE] });
     await t.run();
-    expect(fetchDomains(t.calls[0].body)).toContain(FIXTURE);
+    expect(systemMessage(t.calls[0].body)).toContain(FIXTURE);
+    expect(fetchTools(t.calls[0].body)).toEqual([{ type: "otari_web_fetch" }]);
+    for (const c of t.calls) expect(JSON.stringify(c.body.tools ?? [])).not.toContain(FIXTURE);
     const review = t.calls.find((c) => c.opts.tags?.role === "review");
     expect(systemMessage(review!.body)).not.toContain(FIXTURE);
   });

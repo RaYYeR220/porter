@@ -18,6 +18,7 @@ export function realPorts(arm: Arm, o: { endUserBudget: "regular" | "default" })
       runIssue(input, {
         otari,
         mcpServerId,
+        // Prompt guidance only: the workspaces' web-fetch policy must allow this host for the page cases.
         extraFetchDomains: [FIXTURE_HOST],
         ...(endUserBudget ? { endUserBudget } : {}),
       }),

@@ -2,7 +2,12 @@ import { createOtariClient } from "../otari/client";
 import { OtariError } from "../otari/errors";
 import { toStoredEmbedding } from "../db/vector";
 
-export const EMBEDDING_MODEL = "alibaba/qwen3-embedding-8b";
+/**
+ * Hosted Otari's catalog has the 0.6B and 4B Qwen3 embedding models, not 8B (`alibaba/qwen3-embedding-8b`
+ * is a 400 invalid_model). 4B returns 2560 dims; toStoredEmbedding keeps the first 1024 (Matryoshka) and
+ * renormalises.
+ */
+export const EMBEDDING_MODEL = "alibaba/qwen3-embedding-4b";
 export const EMBED_BATCH = 32;
 
 /** Turns texts into stored (1024-dim, normalised) vectors; null where embedding was not possible. */
