@@ -19,3 +19,6 @@ mockups/
 *-internal/
 AGENTS.md
 CLAUDE.md
+
+# General Sans is fetched at build time (Fontshare licence: self-host, do not redistribute)
+public/fonts/*.woff2
