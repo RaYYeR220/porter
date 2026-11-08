@@ -6,7 +6,7 @@ import { createOtariClient } from "../otari/client";
 import type { OtariClient } from "../otari/client";
 import { OtariError } from "../otari/errors";
 import type { GuardrailViolation, OtariErrorKind } from "../otari/errors";
-import type { ChatBody, ChatResponse, OtariMeta } from "../otari/types";
+import type { CallOpts, ChatBody, ChatResponse, OtariMeta } from "../otari/types";
 import { checkOutput } from "./output-check";
 import { createDbRecorder, truncateToolCalls } from "./record";
 import type { Proposal, Recorder, StepRecord } from "./record";
@@ -118,6 +118,20 @@ export async function startRun(input: IssueInput, deps: { db?: Db; recorder?: Re
   return id;
 }
 
+/**
+ * Headers every pipeline call sends (all but the per-attempt timeout signal). Exported so
+ * scripts/probe-shapes.ts sends exactly what a run sends.
+ */
+export function runCallOpts(runId: string, role: Role, arm: IssueInput["arm"], endUserBudget?: string): CallOpts {
+  return {
+    conversationId: `run-${runId}`,
+    tags: { app: "porter", role, arm },
+    ...(endUserBudget ? { endUserBudget } : {}),
+    // Same key on the retry, so a request Otari already served is not billed twice.
+    idempotencyKey: `run-${runId}-${role}`,
+  };
+}
+
 type Failure = { kind: OtariErrorKind | "exception" | "deadline"; error: OtariError | null; role: Role };
 type CallResult<T> = { ok: true; data: ChatResponse; value: T } | { ok: false; failure: Failure };
 /** Reads a successful response once: the value for the pipeline, extra fields for its step row. */
@@ -197,11 +211,7 @@ class Run {
       let err: unknown;
       try {
         res = await this.otari.chat(body, {
-          conversationId: `run-${this.id}`,
-          tags: { app: "porter", role, arm: this.input.arm },
-          ...(this.endUserBudget ? { endUserBudget: this.endUserBudget } : {}),
-          // Same key on the retry, so a request Otari already served is not billed twice.
-          idempotencyKey: `run-${this.id}-${role}`,
+          ...runCallOpts(this.id, role, this.input.arm, this.endUserBudget),
           signal: AbortSignal.timeout(Math.min(STEP_TIMEOUT_MS[role], left)),
         });
       } catch (e) {

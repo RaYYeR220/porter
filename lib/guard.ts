@@ -8,9 +8,9 @@ import { getGuardEnv } from "./env";
 type Handler = ReturnType<typeof createGuardHandler>;
 let cached: Handler | undefined;
 
-/** Adapts the Otari client (guard key) to the package's ChatFn. */
-export function otariChat(apiKey: string, baseUrl?: string): ChatFn {
-  const client = createOtariClient({ apiKey, baseUrl });
+/** Adapts the Otari client (guard key) to the package's ChatFn. `fetchImpl` lets scripts/probe-shapes.ts record the raw responses. */
+export function otariChat(apiKey: string, baseUrl?: string, fetchImpl?: typeof fetch): ChatFn {
+  const client = createOtariClient({ apiKey, baseUrl, fetchImpl });
   return async (body) => {
     const { data } = await client.chat(body, { tags: { app: "porter", role: "guard" } });
     return { content: data.choices?.[0]?.message?.content ?? "" };

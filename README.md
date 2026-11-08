@@ -227,6 +227,8 @@ pnpm i && pnpm drizzle-kit migrate && pnpm dev
 
 `GET /api/health` answers `{"ok":true}`. Without a token, `/api/guard/profiles` and `/api/mcp/mcp` answer 401.
 
+`pnpm probe:shapes` sends every request Porter builds (triage, repro and review on both arms, the guard classifiers, embeddings, end-user, key-budget and MCP routes) to Otari with the keys in `.env.local` and prints each status, never a key ([`scripts/probe-shapes.ts`](scripts/probe-shapes.ts)). Otari checks a request's shape before its funds, so on an unfunded org a model call that stops at 402 was accepted and cost nothing; the script exits non-zero if any of Porter's requests is refused for its shape (400 or 422). Its first call is a two-word embedding: if that one is served, the org has money and the script stops before the model calls.
+
 Snapshot a repository so the MCP tools have something to read (a handful of GitHub API calls through `gh`, then embeddings on the ops key):
 
 ```sh
