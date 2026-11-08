@@ -3,8 +3,10 @@
  * under the fake repository demo/porter-ui-seed. Never run it against a database a judge is reading
  * for long: take the shots, then run `pnpm seed:ui:clean`.
  *
- *   pnpm seed:ui          # cleans any earlier seed, inserts a fresh one, prints the ids to open
- *   pnpm seed:ui:clean    # deletes everything the seed inserted (scripts/clean-ui-demo.ts)
+ * Both refuse to run unless the target database host is named on the command line:
+ *
+ *   pnpm seed:ui --yes-write-to <db-host>        # cleans any earlier seed, inserts a fresh one, prints the ids to open
+ *   pnpm seed:ui:clean --yes-write-to <db-host>  # deletes everything the seed inserted (scripts/clean-ui-demo.ts)
  */
 import { randomUUID } from "node:crypto";
 import { fixedReply } from "../lib/agent/replies";
@@ -12,7 +14,7 @@ import { db } from "../lib/db/client";
 import { authors, kv, proposals, runs, steps } from "../lib/db/schema";
 import { armClient } from "../lib/agent/pipeline";
 import { presetIssues } from "../lib/try/presets";
-import { cleanUiDemo, countUiDemo, SEED_AUTHORS, SEED_REPO } from "./ui-demo-core";
+import { cleanUiDemo, countUiDemo, requireWriteConsent, SEED_AUTHORS, SEED_REPO } from "./ui-demo-core";
 
 type StepRow = typeof steps.$inferInsert;
 type RunRow = typeof runs.$inferInsert;
@@ -394,6 +396,7 @@ async function budgetLimits(): Promise<{ newcomer: string | null; regular: strin
 }
 
 async function main() {
+  requireWriteConsent("seed-ui-demo");
   const earlier = await cleanUiDemo(db());
   if (earlier.runs || earlier.authors) console.log(`removed an earlier seed: ${earlier.runs} runs, ${earlier.authors} authors`);
 
