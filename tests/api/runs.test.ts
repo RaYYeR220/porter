@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { decodeCursor, encodeCursor, handleRunGet, handleRunsList, type RunDetail, type RunListRow, type RunsReadStore } from "../../lib/api/runs";
+import { decodeCursor, encodeCursor, handleRunGet, handleRunsList, type RunDetail, type RunListItem, type RunsReadStore } from "../../lib/api/runs";
 import { memoryKv } from "./fakes";
 
 const ID = "0b9f1c1e-6a3d-4c0e-9a55-3f0c2f6a1b11";
-const row = (n: number): RunListRow => ({
+const row = (n: number): RunListItem => ({
   id: `0b9f1c1e-6a3d-4c0e-9a55-3f0c2f6a1b${String(n).padStart(2, "0")}`,
   source: "web",
   arm: "porter",
@@ -16,9 +16,12 @@ const row = (n: number): RunListRow => ({
   createdAt: new Date(Date.UTC(2026, 10, 7, 12, 0, 60 - n)),
   finishedAt: null,
   createdAtKey: `2026-11-07 12:00:${String(60 - n).padStart(2, "0")}.123456+00`,
+  servedModel: "openai/gpt-oss-120b",
+  pendingProposals: 0,
+  heldBy: null,
 });
 
-function store(over: Partial<RunDetail> = {}, rows: RunListRow[] = []): RunsReadStore & { lastList?: unknown } {
+function store(over: Partial<RunDetail> = {}, rows: RunListItem[] = []): RunsReadStore & { lastList?: unknown } {
   const s: RunsReadStore & { lastList?: unknown } = {
     async list(q) {
       s.lastList = q;
@@ -113,6 +116,19 @@ describe("GET /api/runs", () => {
     expect(body.runs[0]).not.toHaveProperty("createdAtKey");
     await handleRunsList(new Request(`http://x/api/runs?cursor=${body.nextCursor}`), s);
     expect(s.lastList).toMatchObject({ before: { at: "2026-11-07 12:00:00.123456+00", id: a.id } });
+  });
+
+  it("each row carries the triage model, pending proposals and how a hold happened, and nothing from step bodies", async () => {
+    const held = { ...row(1), status: "held_guardrail", servedModel: null, heldBy: "gateway" as const };
+    const answered = { ...row(2), servedModel: "openai/gpt-oss-20b", pendingProposals: 2 };
+    const body = await (await handleRunsList(new Request("http://x/api/runs"), store({}, [held, answered]))).json();
+    expect(body.runs[0]).toMatchObject({ status: "held_guardrail", servedModel: null, pendingProposals: 0, heldBy: "gateway" });
+    expect(body.runs[1]).toMatchObject({ servedModel: "openai/gpt-oss-20b", pendingProposals: 2, heldBy: null });
+    for (const r of body.runs) {
+      expect(r).not.toHaveProperty("steps");
+      expect(r).not.toHaveProperty("toolCalls");
+      expect(r).not.toHaveProperty("createdAtKey");
+    }
   });
 
   it("cursor round-trips and rejects junk timestamps", () => {

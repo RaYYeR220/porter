@@ -12,6 +12,7 @@ import type { TryDeps } from "../try/handler";
 import { dailySalt } from "./common";
 import type { AuthorActionDeps } from "./author-actions";
 import type { ProposalDecisionDeps } from "./proposal-decision";
+import { drizzleProposalsReadStore, type ProposalsListDeps } from "./proposals-list";
 import { drizzleRunsStore } from "./runs";
 
 const nonEmpty = (v: string | undefined) => (v && v.trim() !== "" ? v.trim() : null);
@@ -65,6 +66,10 @@ export const productionApi = {
       },
       defer,
     };
+  },
+
+  proposalsList(): ProposalsListDeps {
+    return { store: drizzleProposalsReadStore(), demoRepo: nonEmpty(process.env.DEMO_REPO) };
   },
 
   proposals(): ProposalDecisionDeps {

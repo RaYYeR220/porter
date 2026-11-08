@@ -1,5 +1,5 @@
 import { and, desc, eq, sql, type SQL } from "drizzle-orm";
-import { db as defaultDb } from "../db/client";
+import { db as defaultDb, type Db } from "../db/client";
 import { guardVerdicts, proposals, runs, steps } from "../db/schema";
 import type { KvStore } from "../kv";
 import { reviewKey } from "../agent/pipeline";
@@ -25,6 +25,20 @@ export type RunListRow = {
   createdAtKey: string;
 };
 
+/** What the console needs from a run's steps and proposals, computed in the list query itself. */
+export type RunListFacts = {
+  /** The model Otari served for the run's triage call, or null when none was served. */
+  servedModel: string | null;
+  /** Proposals of this run still waiting for a maintainer. */
+  pendingProposals: number;
+  /** For a held run: whether the gateway held it or Porter's output check did. Null otherwise. */
+  heldBy: "gateway" | "output" | null;
+};
+
+export type RunListItem = RunListRow & RunListFacts;
+
+export type RunListQuery = { source?: string; status?: string; limit: number; before?: { at: string; id: string } };
+
 export type RunDetail = {
   run: RunListRow & { body: string | null; reply: string | null; triage: unknown };
   steps: Array<Record<string, unknown>>;
@@ -33,7 +47,7 @@ export type RunDetail = {
 };
 
 export interface RunsReadStore {
-  list(q: { source?: string; status?: string; limit: number; before?: { at: string; id: string } }): Promise<RunListRow[]>;
+  list(q: RunListQuery): Promise<RunListItem[]>;
   get(id: string): Promise<RunDetail | null>;
 }
 
@@ -52,21 +66,54 @@ const listCols = {
   createdAtKey: sql<string>`${runs.createdAt}::text`,
 };
 
+/**
+ * The list in one statement: a lateral aggregate over each run's steps (indexed by run id) gives the
+ * triage model and how a hold happened, and a grouped count of pending proposals is joined on.
+ * Step bodies (guardrails, tool calls) never leave the database here.
+ */
+export function runsListQuery(d: Db, q: RunListQuery) {
+  const conds: SQL[] = [];
+  if (q.source) conds.push(eq(runs.source, q.source as (typeof RUN_SOURCES)[number]));
+  if (q.status) conds.push(eq(runs.status, q.status));
+  if (q.before) {
+    conds.push(sql`(${runs.createdAt}, ${runs.id}) < (${q.before.at}::timestamptz, ${q.before.id}::uuid)`);
+  }
+  const facts = d
+    .select({
+      servedModel: sql<string | null>`(array_agg(${steps.servedModel} order by ${steps.id}) filter (where ${steps.role} = 'triage' and ${steps.servedModel} is not null))[1]`.as(
+        "served_model",
+      ),
+      gatewayHold: sql<boolean>`coalesce(bool_or(${steps.errorKind} = 'guardrail_violation'), false)`.as("gateway_hold"),
+      outputHold: sql<boolean>`coalesce(bool_or(${steps.role} = 'output_check' and ${steps.errorKind} = 'output_blocked'), false)`.as("output_hold"),
+    })
+    .from(steps)
+    .where(eq(steps.runId, runs.id))
+    .as("run_facts");
+  const pending = d
+    .select({ runId: proposals.runId, n: sql<number>`count(*)::int`.as("pending_n") })
+    .from(proposals)
+    .where(eq(proposals.status, "pending"))
+    .groupBy(proposals.runId)
+    .as("pending_proposals");
+  return d
+    .select({
+      ...listCols,
+      servedModel: facts.servedModel,
+      pendingProposals: sql<number>`coalesce(${pending.n}, 0)`.mapWith(Number),
+      heldBy: sql<"gateway" | "output" | null>`case when ${runs.status} = 'held_guardrail' then case when ${facts.gatewayHold} then 'gateway' when ${facts.outputHold} then 'output' end end`,
+    })
+    .from(runs)
+    .leftJoinLateral(facts, sql`true`)
+    .leftJoin(pending, eq(pending.runId, runs.id))
+    .where(conds.length ? and(...conds) : undefined)
+    .orderBy(desc(runs.createdAt), desc(runs.id))
+    .limit(q.limit);
+}
+
 export function drizzleRunsStore(getDb = defaultDb): RunsReadStore {
   return {
     async list(q) {
-      const conds: SQL[] = [];
-      if (q.source) conds.push(eq(runs.source, q.source as (typeof RUN_SOURCES)[number]));
-      if (q.status) conds.push(eq(runs.status, q.status));
-      if (q.before) {
-        conds.push(sql`(${runs.createdAt}, ${runs.id}) < (${q.before.at}::timestamptz, ${q.before.id}::uuid)`);
-      }
-      return getDb()
-        .select(listCols)
-        .from(runs)
-        .where(conds.length ? and(...conds) : undefined)
-        .orderBy(desc(runs.createdAt), desc(runs.id))
-        .limit(q.limit);
+      return runsListQuery(getDb(), q);
     },
     async get(id) {
       const d = getDb();
