@@ -6,7 +6,7 @@ Porter answers GitHub issues from people a project has never met. It runs on ope
 
 - **Live:** https://porter-frontdesk.vercel.app
 - **[Try it without an account](https://porter-frontdesk.vercel.app/try):** file a test issue as a stranger and watch each gateway call happen.
-- **On GitHub:** open a test issue on the demo repository (the link is on the site's front page).
+- **On GitHub:** open a test issue on the demo repository, [RaYYeR220/porter-demo](https://github.com/RaYYeR220/porter-demo).
 - **Reviewing Porter:** [JUDGES.md](JUDGES.md) is a five-minute path, [CHALLENGE_CHECKLIST.md](CHALLENGE_CHECKLIST.md) maps each requirement to code and pages, and [CLAIMS.md](CLAIMS.md) says how to check every public statement.
 
 Open-source maintainers now get issues written for their bots, not for them: an instruction hidden in an HTML comment, a paragraph that baits the triage bot into calling a tool, a docs link swapped for a lookalike. One noisy author can file forty "+1" issues overnight and spend the project's monthly AI budget before anyone wakes up. The safe answer is to switch the bot off for strangers. Porter keeps answering them, because the rules a stranger runs into (which text reaches a model, what one author may spend, which tools their issue may touch) live in the gateway, not in a prompt the stranger can argue with.
@@ -32,7 +32,7 @@ Each row names the code that makes the call and what a reader can see without ac
 | --- | --- | --- |
 | **Per-user budgets** | Every stranger-originated call uses the `desk-strangers` service key and sets `user` to the author's id ([`lib/agent/triage.ts`](lib/agent/triage.ts), [`lib/agent/repro.ts`](lib/agent/repro.ts), [`lib/agent/review.ts`](lib/agent/review.ts)). Otari creates the end user on first sight and holds it to its own daily budget: `newcomer` by default, `regular` after an upgrade. [`lib/authors.ts`](lib/authors.ts) reads `GET /end-users` and writes `PUT`/`PATCH /end-users` (upgrade, block). Refusals become fixed replies in [`lib/agent/pipeline.ts`](lib/agent/pipeline.ts) and [`lib/agent/replies.ts`](lib/agent/replies.ts). | Per-author meters on [/console](https://porter-frontdesk.vercel.app/console) (from `GET /api/authors`). The try page's spam preset files twelve issues from one visitor against one allowance; once it is spent, the rest are refused at the gateway. |
 | **Budgets and spending limits** | Workspace ceilings on `desk`, `guard` and `baseline`, key budgets on the maintainer, ops and guard keys. [`lib/balance.ts`](lib/balance.ts) reads `GET /key/budget` on the strangers key and pauses /try below `BALANCE_FLOOR_USD`; a 402 sets a ten-minute pause. Every role sends an explicit `max_tokens` ([`lib/agent/roles.ts`](lib/agent/roles.ts)), so budget holds match what a call can really cost. | /try shows "Paused while the balance is low" when the wallet runs low. The run trace shows each call's `usage.cost_usd`. |
-| **Guardrails** | Porter's `/api/guard/validate` ([`app/api/guard/validate/route.ts`](app/api/guard/validate/route.ts), [`lib/guard.ts`](lib/guard.ts)) is an org-level guardrail, mandated on workspace `desk` with mode `block`, served by [`packages/porter-guard`](packages/porter-guard/README.md) with the profiles `prompt-injection`, `secrets` and `harm`. A 403 `guardrail_violation` is parsed in [`lib/otari/errors.ts`](lib/otari/errors.ts) and becomes a held run. | The try page's "Hidden instruction" preset: the run stops at triage with `guardrail_violation`, no model is served, and the step shows the profile that held it, its score and porter-guard's explanation from Otari's 403 body. |
+| **Guardrails** | Porter's guard service at `https://<host>/api/guard` is an org-level guardrail, mandated on workspace `desk` with mode `block`; Otari posts each check to its `/validate` ([`app/api/guard/validate/route.ts`](app/api/guard/validate/route.ts), [`lib/guard.ts`](lib/guard.ts)). It is served by [`packages/porter-guard`](packages/porter-guard/README.md) with the profiles `prompt-injection`, `secrets` and `harm`. A 403 `guardrail_violation` is parsed in [`lib/otari/errors.ts`](lib/otari/errors.ts) and becomes a held run. | The try page's "Hidden instruction" preset: the run stops at triage with `guardrail_violation`, no model is served, and the step shows the profile that held it, its score and porter-guard's explanation from Otari's 403 body. |
 | **Model routing and fallbacks** | Every role asks for a routing policy name, never a model id ([`lib/agent/roles.ts`](lib/agent/roles.ts)). `porter-triage` tiers down to `gpt-oss-20b` from 80 % of the author's budget and has a fallback chain; `porter-repro` and `porter-review` are fallback policies. [`lib/otari/client.ts`](lib/otari/client.ts) records `Otari-Model`, `Otari-Provider`, `Otari-Fallback` and `Otari-Attempt-Count` on every step. | Each step in a run trace shows "policy → served model, provider", a fallback badge with the attempt count, and the tier-down model when the author was near their cap. |
 | **MCP** | Porter's own MCP server ([`app/api/mcp/[transport]/route.ts`](app/api/mcp/%5Btransport%5D/route.ts), tools in [`lib/mcp/tools.ts`](lib/mcp/tools.ts)) is registered once as the stored server `porter-repo` and passed as `mcp_server_ids`, so the gateway runs the tool loop. Its ACL denies by default, gives `desk-strangers` `@read` and `desk-maintainer` `*`. Approvals use caller-orchestrated MCP: `GET /mcp/servers/{id}/tools`, then `POST /mcp/execute` on the maintainer key ([`lib/github/commands.ts`](lib/github/commands.ts)). | MCP tool calls listed in the triage step of a trace (from `otari_tool_calls`). A proposal moves from pending to executed in the console after Approve. |
 | **Web fetch** | The triage call declares `otari_web_fetch` with no settings: hosted Otari refuses per-request fetch settings (`allowed_domains`, `max_uses`) with a 400 ([`lib/agent/triage.ts`](lib/agent/triage.ts)). Which hosts can be fetched is the workspace's web-fetch policy (setup step 8); the triage prompt names the same hosts (github.com, pypi.org, npmjs.com, docs.python.org and the repository's docs host) and asks for at most two pages, and `max_tool_iterations: 6` caps the loop. Web search is not used. | Fetches appear as tool calls in the triage step, with the URL. Whatever was fetched, a reply may only link to the repository on GitHub, the package registries, the Python docs and the repository's docs host. |
@@ -104,7 +104,7 @@ flowchart LR
     tryApi["POST /api/try"]
     pipe["Pipeline<br/>triage, repro, review,<br/>output check"]
     desk["/console<br/>approve, upgrade, block"]
-    guard["POST /api/guard/validate<br/>porter-guard"]
+    guard["porter-guard at /api/guard<br/>POST /validate"]
     mcp["/api/mcp/mcp<br/>porter-repo tools"]
     db[("Neon Postgres + pgvector<br/>snapshot, runs, steps,<br/>verdicts, proposals")]
   end
@@ -126,28 +126,28 @@ flowchart LR
   end
 
   visitor --> tryApi
-  ghIssue -. "issues, issue_comment" .-> hook
+  ghIssue -- "issues, issue_comment" --> hook
   tryApi --> pipe
-  hook -.-> pipe
+  hook --> pipe
   pipe -- "user = author id" --> kStr
-  kStr -. "guardrail calls /validate" .-> guard
+  kStr -- "guardrail calls /validate" --> guard
   guard --> kGrd
   kGrd --> models
   kStr --> loop
-  loop -. "read tools only" .-> mcp
+  loop -- "read tools only" --> mcp
   loop --> models
   kOps --> models
   kBas --> loop
   desk -- "approved proposal" --> kMnt
-  kMnt -. "/mcp/execute" .-> mcp
-  mcp -. "labels, close as duplicate" .-> ghIssue
-  pipe -. "one reply comment" .-> ghIssue
+  kMnt -- "/mcp/execute" --> mcp
+  mcp -- "labels, close as duplicate" --> ghIssue
+  pipe -- "one reply comment" --> ghIssue
   pipe --> db
   mcp --> db
   guard --> db
 ```
 
-Solid arrows are wired in code and configured in the Otari org; dotted arrows wait on a one-time registration (the GitHub App installation, the stored MCP server, the org-level guardrail, mandated on workspace `desk`). Trust boundaries, data stores and a request walkthrough: [docs/architecture.md](docs/architecture.md).
+Every arrow is wired in code and registered: the GitHub App is installed on the demo repository, the stored MCP server is connected, and porter-guard is an org-level guardrail, mandated on workspace `desk`. Which paths have carried live traffic is tracked in [JUDGES.md](JUDGES.md#what-is-live). Trust boundaries, data stores and a request walkthrough: [docs/architecture.md](docs/architecture.md).
 
 ## Run it yourself
 
@@ -217,7 +217,11 @@ On otari.ai, budgets, ceilings, keys, routing policies, MCP servers and org-leve
 
    A plan holds at most five candidates and policies cannot point at other policies. The tier-down reads the tightest budget gating the request: for a service-key end user that is usually the end user's own budget, or the workspace ceiling when that one is closer to its limit.
 6. **MCP server** (workspace `desk` → Tools → MCP servers → Add MCP server): name `porter-repo`, URL `https://<your-host>/api/mcp/mcp` (streamable HTTP), auth token = `MCP_TOKEN`, default policy Deny. Label `search_issues`, `get_issue`, `read_file`, `find_in_repo` and `list_releases` as read tools, then grant `desk-strangers` → `@read` and `desk-maintainer` → `*`. Put the server id in `OTARI_MCP_SERVER_ID`. Register the same URL in `baseline` with default policy Allow for `OTARI_MCP_SERVER_ID_BASELINE`. New workspaces refuse inline `mcp_servers`, so Porter only uses stored servers.
-7. **Guardrail** (Organization → Guardrails): create an org-level guardrail, mandated on workspace `desk`, with the URL `https://<your-host>/api/guard/validate`, the credential `GUARD_TOKEN` (Otari sends it as `Authorization: Bearer`), the profiles `prompt-injection`, `secrets` and `harm`, mode `block` and `on_unavailable: block`. Do not mandate it on `guard`, or the guard's own classifier calls would be screened by the guard, nor on `baseline`, the control arm. More in [packages/porter-guard/README.md](packages/porter-guard/README.md).
+7. **Guardrail**: Porter's guard service becomes an org-level guardrail, mandated on workspace `desk`, one mandate per profile. Organization → Guardrails → "Mandate a guardrail" → "Your own guardrails service", then, three times (Profile `prompt-injection`, then `secrets`, then `harm`):
+   - Endpoint: the service's **base URL**, `https://<your-host>/api/guard`. Otari appends `/validate` itself; entering `…/api/guard/validate` makes it call `…/validate/validate`, which answers 404, and every check fails as "guardrail profile could not be evaluated".
+   - Credential: `GUARD_TOKEN`. Otari stores it write-only and sends it as `Authorization: Bearer`.
+   - Mode: Block. If unreachable: "Refuse the request".
+   - Runs in: chosen workspaces → `desk` only. Not `guard`, or the guard's own classifier calls would be screened by the guard; not `baseline`, the control arm. More in [packages/porter-guard/README.md](packages/porter-guard/README.md).
 8. **Web fetch** (workspace → Tools → Web search), in `desk` and in `baseline`: enable web fetch (web search can stay off) and set the allowed domains to github.com, pypi.org, npmjs.com, www.npmjs.com, docs.python.org and the demo repository's docs host; for eval runs add `porter-frontdesk.vercel.app`, where the indirect-injection fixture pages live. Hosted Otari takes no fetch settings on the request, so this list is the only hard limit on what the model can fetch. Until web access is enabled, every triage call gets 403 "web access is not enabled for this workspace".
 
 ### Install and run

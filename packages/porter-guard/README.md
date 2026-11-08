@@ -82,9 +82,12 @@ The rules live in [`src/ensemble.ts`](src/ensemble.ts) and the detectors in [`sr
 On otari.ai this is done in the dashboard; an API key cannot create org-level guardrails or mandate them.
 
 1. Deploy the service (below) at a public HTTPS URL.
-2. Organization → Guardrails: create an org-level guardrail with the URL of `/validate` and the credential `GUARD_TOKEN`. Otari sends the credential as `Authorization: Bearer <credential>`. Hosted Otari does not send a request-level guardrail `credential`, so an org-level guardrail is the way to authenticate the call.
-3. Mandate it on the workspaces whose traffic should be screened (Porter: workspace `desk`), for each profile you want, with mode `block` and `on_unavailable: block`.
-4. Give the service an Otari key from a workspace where it is **not** mandated, so its own classifier calls are not screened by itself.
+2. Organization → Guardrails → "Mandate a guardrail" → "Your own guardrails service". Add one mandate per profile you want (`prompt-injection`, `secrets`, `harm`):
+   - Endpoint: the service's **base URL**. Otari appends `/validate` itself, so enter `https://guard.example.org` for the standalone server, or `https://<host>/api/guard` for the route inside Porter. An endpoint that already ends in `/validate` makes Otari call `/validate/validate`, which answers 404, and every check fails as "guardrail profile could not be evaluated".
+   - Credential: `GUARD_TOKEN`. Otari stores it write-only and sends it as `Authorization: Bearer <credential>`. Hosted Otari does not send a request-level guardrail `credential`, so an org-level guardrail is the way to authenticate the call.
+   - Mode: Block. If unreachable: "Refuse the request".
+   - Runs in: the workspaces whose traffic should be screened (Porter: an org-level guardrail, mandated on workspace `desk`).
+3. Give the service an Otari key from a workspace where it is **not** mandated, so its own classifier calls are not screened by itself.
 
 Org-level guardrails are input-only: Otari screens what goes into a model call, not what comes out of it.
 
@@ -112,7 +115,7 @@ docker build -t porter-guard packages/porter-guard
 docker run -p 8080:8080 -e GUARD_TOKEN=... -e OTARI_API_KEY=... porter-guard
 ```
 
-Routes: `POST /validate`, `GET /profiles`, `GET /health`.
+Routes: `POST /validate`, `GET /profiles`, `GET /health`. In the mandate, the Endpoint is the server's base URL (no `/validate`).
 
 ## Use as a library
 
