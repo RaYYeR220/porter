@@ -63,3 +63,29 @@ export function verdict(status: number, body: string, kind: "model" | "api"): st
 export function row(cells: Array<string | number | null>): string {
   return `| ${cells.map((c) => String(c ?? "–").replace(/\|/g, "\\|")).join(" | ")} |`;
 }
+
+/**
+ * Whether the model probes may run, from the embedding canary's statuses (empty when the call threw
+ * before any response). Fails closed: only an exact 402 proves the org cannot pay, so anything else
+ * (2xx, 429, 5xx, a timeout) skips the model probes unless the caller passed --allow-spend.
+ */
+export function canaryDecision(statuses: number[], allowSpend: boolean): { runModels: boolean; note: string | null } {
+  if (allowSpend) return { runModels: true, note: null };
+  const last = statuses.at(-1);
+  if (last === 402) return { runModels: true, note: null };
+  if (last !== undefined && last >= 200 && last < 300) {
+    return { runModels: false, note: "the org has funds: skipping model probes (re-run with --allow-spend to send them)" };
+  }
+  return { runModels: false, note: `canary inconclusive (status ${last ?? "none"}), skipping model probes` };
+}
+
+/** List routes print counts, not bodies (they hold other end users' ids and meters). */
+export function listSummary(body: string): string {
+  try {
+    const parsed: unknown = JSON.parse(body);
+    if (Array.isArray(parsed)) return `${parsed.length} item${parsed.length === 1 ? "" : "s"} (body omitted)`;
+  } catch {
+    // not JSON: fall through
+  }
+  return "body omitted";
+}

@@ -1,6 +1,48 @@
 import { describe, expect, it } from "vitest";
-import { recordingFetch, redact, row, secretValues, verdict } from "../../scripts/probe-shapes-core";
+import { canaryDecision, listSummary, recordingFetch, redact, row, secretValues, verdict } from "../../scripts/probe-shapes-core";
 import type { Exchange } from "../../scripts/probe-shapes-core";
+
+describe("probe-shapes: the funds canary fails closed", () => {
+  it("402 (insufficient funds) lets the model probes run", () => {
+    expect(canaryDecision([402], false)).toEqual({ runModels: true, note: null });
+  });
+
+  it.each([429, 500, 502, 503, 401, 404, 400])("status %i skips the model probes as inconclusive", (status) => {
+    const d = canaryDecision([status], false);
+    expect(d.runModels).toBe(false);
+    expect(d.note).toBe(`canary inconclusive (status ${status}), skipping model probes`);
+  });
+
+  it("a canary that threw (timeout, network) skips the model probes", () => {
+    expect(canaryDecision([], false)).toEqual({ runModels: false, note: "canary inconclusive (status none), skipping model probes" });
+  });
+
+  it.each([200, 201])("a served canary (%i) means the org has funds: skip unless --allow-spend", (status) => {
+    const d = canaryDecision([status], false);
+    expect(d.runModels).toBe(false);
+    expect(d.note).toMatch(/has funds/);
+    expect(canaryDecision([status], true)).toEqual({ runModels: true, note: null });
+  });
+
+  it("--allow-spend sends the model probes whatever the canary said", () => {
+    for (const s of [[], [429], [500]]) expect(canaryDecision(s, true).runModels).toBe(true);
+  });
+
+  it("the last exchange decides when the canary made more than one", () => {
+    expect(canaryDecision([500, 402], false).runModels).toBe(true);
+    expect(canaryDecision([402, 500], false).runModels).toBe(false);
+  });
+});
+
+describe("probe-shapes: list routes print counts, not bodies", () => {
+  it("counts a JSON array and never echoes it", () => {
+    const body = JSON.stringify([{ external_id: "web:0b772a7c84c08af9", spend: 0 }, { external_id: "gh:alice" }]);
+    expect(listSummary(body)).toBe("2 items (body omitted)");
+    expect(listSummary("[{}]")).toBe("1 item (body omitted)");
+    expect(listSummary("not json")).toBe("body omitted");
+    expect(listSummary('{"a":1}')).toBe("body omitted");
+  });
+});
 
 describe("probe-shapes: never prints a secret", () => {
   const env = {

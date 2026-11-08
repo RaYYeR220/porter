@@ -7,8 +7,10 @@
  * On an org with a $0 balance Otari checks the request shape before funds, so a model route answering
  * 402 accepted the shape and cost nothing; a 400/422 means a builder sends something Otari rejects.
  *
- * Safety: the first call is an embedding of two words. If Otari serves it, the org has money and the
- * script stops before any model call that could spend (re-run with --allow-spend to go on anyway).
+ * Safety: the first call is an embedding of two words, and the model probes run only if it answers
+ * exactly 402 (insufficient funds). Served, rate-limited, failed or timed out, the canary proves nothing
+ * about funds, so the script skips every model call and probes the non-model routes only (re-run with
+ * --allow-spend to send the model calls anyway). List routes print counts, not bodies.
  * Keys and other secrets are read from the environment and never printed. The end user it touches is
  * spike:shape-<random> and is deleted at the end on both service keys.
  */
@@ -27,7 +29,7 @@ import { otariChat } from "../lib/guard";
 import { createOtariClient, DEFAULT_BASE_URL } from "../lib/otari/client";
 import type { ChatBody } from "../lib/otari/types";
 import { EMBEDDING_MODEL } from "../lib/snapshot/embed";
-import { recordingFetch, redact, row, secretValues, verdict } from "./probe-shapes-core";
+import { canaryDecision, listSummary, recordingFetch, redact, row, secretValues, verdict } from "./probe-shapes-core";
 import type { Exchange } from "./probe-shapes-core";
 
 const KEYS = {
@@ -90,7 +92,8 @@ const chatOn = (name: KeyName, arm: IssueInput["arm"], role: Role, body: ChatBod
 const withTools = (body: ChatBody, tools: Array<Record<string, unknown>>): ChatBody => ({ ...body, tools });
 
 /** A `variant` is informational (an alternative or a deliberately old shape) and never fails the run. */
-type Probe = { name: string; key: KeyName; kind: "model" | "api"; run: () => Promise<unknown>; variant?: boolean };
+/** `list` routes print a count instead of their body (other end users' ids and meters). */
+type Probe = { name: string; key: KeyName; kind: "model" | "api"; run: () => Promise<unknown>; variant?: boolean; list?: boolean };
 
 function modelProbes(): Probe[] {
   const out: Probe[] = [];
@@ -167,8 +170,8 @@ function apiProbes(): Probe[] {
     { name: "end user: get (meter)", key: "strangers", kind: "api", run: () => s().endUsers.get(endUser) },
     { name: "end user: put (create on newcomer)", key: "strangers", kind: "api", run: () => s().endUsers.put(endUser, newcomer) },
     { name: "end user: patch (unblock)", key: "strangers", kind: "api", run: () => s().endUsers.patch(endUser, { blocked: false }) },
-    { name: "end users: list", key: "strangers", kind: "api", run: () => s().endUsers.list(5) },
-    { name: "end-user budgets", key: "strangers", kind: "api", run: () => s().endUserBudgets() },
+    { name: "end users: list", key: "strangers", kind: "api", list: true, run: () => s().endUsers.list(5) },
+    { name: "end-user budgets", key: "strangers", kind: "api", list: true, run: () => s().endUserBudgets() },
     { name: "key budget (strangers, /try floor)", key: "strangers", kind: "api", run: () => s().keyBudget() },
     { name: "mcp servers (maintainer)", key: "maintainer", kind: "api", run: () => raw("maintainer", "GET", "/mcp/servers") },
     { name: "mcp servers (strangers)", key: "strangers", kind: "api", run: () => raw("strangers", "GET", "/mcp/servers") },
@@ -189,7 +192,8 @@ async function runProbe(p: Probe): Promise<Exchange[]> {
   const got = log.slice(from);
   if (!p.variant) counted.push(...got);
   for (const x of got) {
-    rows.push(row([p.name, p.key, `${x.method} ${x.path}`, x.model, x.status, verdict(x.status, x.body, p.kind), redact(x.body, secrets)]));
+    const shown = p.list && x.status >= 200 && x.status < 300 ? listSummary(x.body) : redact(x.body, secrets);
+    rows.push(row([p.name, p.key, `${x.method} ${x.path}`, x.model, x.status, verdict(x.status, x.body, p.kind), shown]));
   }
   if (got.length === 0) rows.push(row([p.name, p.key, "–", null, "no request", "builder threw before sending", "–"]));
   return got;
@@ -206,11 +210,15 @@ async function main() {
     kind: "model",
     run: () => client("ops").embed(["shape probe"], EMBEDDING_MODEL, { tags: { app: "porter", role: "embed" } }),
   });
-  const funded = canary.some((x) => x.status >= 200 && x.status < 300);
-  if (funded && !allowSpend) {
-    rows.push(row(["model probes", "–", "–", null, "skipped", "the org has funds; re-run with --allow-spend", "–"]));
-  } else {
+  // Fails closed: model probes run only after an exact 402 (or with --allow-spend).
+  const gate = canaryDecision(
+    canary.map((x) => x.status),
+    allowSpend,
+  );
+  if (gate.runModels) {
     for (const p of modelProbes()) await runProbe(p);
+  } else {
+    rows.push(row(["model probes", "–", "–", null, "skipped", gate.note, "–"]));
   }
   for (const p of apiProbes()) await runProbe(p);
 
