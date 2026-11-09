@@ -54,7 +54,7 @@ export type ChatResponse = {
     finish_reason?: string | null;
     [k: string]: unknown;
   }>;
-  usage?: { prompt_tokens?: number; completion_tokens?: number; cost_usd?: number; [k: string]: unknown };
+  usage?: { prompt_tokens?: number; completion_tokens?: number; cost_usd?: number | string; estimated_cost?: number; [k: string]: unknown };
   otari_tool_calls?: Array<Record<string, unknown>>;
   [k: string]: unknown;
 };

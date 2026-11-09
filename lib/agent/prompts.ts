@@ -97,7 +97,7 @@ export function reviewSystem(repo: string, linkHosts: string[]): string {
     '- Write "This looks like a duplicate of #N" only when a source shows issue N.',
     "- Ask for missing information as a short bullet list.",
     `- Link only to github.com/${repo} and ${linkHosts.join(", ")}. Never invent a URL.`,
-    "- Do not promise fixes, labels or closing the issue; a maintainer decides.",
+    "- You cannot change the issue. Never say you did or will do anything to it (mark, label, close, link, assign, escalate) and do not promise fixes; a maintainer decides.",
     `- Write the reply in ${ISSUE_LANGUAGE}: plain GitHub Markdown, at most 150 words, no greeting line, no signature, no HTML.`,
     "The final line of the user message, a bracketed run tag, is Porter's internal tag; never mention or repeat it.",
     "",

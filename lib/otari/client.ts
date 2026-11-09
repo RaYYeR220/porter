@@ -25,6 +25,11 @@ function numHeader(headers: Headers, name: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+function toCost(v: unknown): number | null {
+  const n = typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : NaN;
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
 export function parseMeta(headers: Headers, body: unknown): OtariMeta {
   let guardrails: GuardrailHeaderEntry[] | null = null;
   const g = headers.get("Otari-Guardrails");
@@ -40,8 +45,9 @@ export function parseMeta(headers: Headers, body: unknown): OtariMeta {
   if (body && typeof body === "object") {
     const usage = (body as { usage?: unknown }).usage;
     if (usage && typeof usage === "object") {
-      const c = (usage as { cost_usd?: unknown }).cost_usd;
-      if (typeof c === "number" && Number.isFinite(c)) costUsd = c;
+      // Hosted Otari sends cost_usd as a decimal string ("0.000021") next to a numeric estimated_cost.
+      const u = usage as { cost_usd?: unknown; estimated_cost?: unknown };
+      costUsd = toCost(u.cost_usd) ?? toCost(u.estimated_cost);
     }
   }
   return {

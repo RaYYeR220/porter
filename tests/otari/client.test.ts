@@ -227,3 +227,19 @@ describe("transport failures", () => {
     expect(err).toMatchObject({ kind: "upstream", code: "invalid_json", status: 200 });
   });
 });
+
+describe("parseMeta cost", () => {
+  const h = new Headers();
+  it("reads cost_usd sent as a decimal string, as hosted Otari does", () => {
+    expect(parseMeta(h, { usage: { cost_usd: "0.000021", estimated_cost: 0.0000213 } }).costUsd).toBeCloseTo(0.000021, 9);
+  });
+  it("falls back to estimated_cost when cost_usd is missing or unparseable", () => {
+    expect(parseMeta(h, { usage: { estimated_cost: 0.0000213 } }).costUsd).toBeCloseTo(0.0000213, 9);
+    expect(parseMeta(h, { usage: { cost_usd: "n/a", estimated_cost: 0.00002 } }).costUsd).toBeCloseTo(0.00002, 9);
+  });
+  it("rejects negative or non-finite values", () => {
+    expect(parseMeta(h, { usage: { cost_usd: "-1" } }).costUsd).toBeNull();
+    expect(parseMeta(h, { usage: { cost_usd: "Infinity" } }).costUsd).toBeNull();
+    expect(parseMeta(h, { usage: {} }).costUsd).toBeNull();
+  });
+});
