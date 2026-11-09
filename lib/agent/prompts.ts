@@ -59,12 +59,12 @@ export function triageSystem(repo: string, fetchDomains: string[]): string {
     "Return only a JSON object with these fields:",
     "- summary: one or two sentences on what the reporter reports or asks.",
     '- kind: "bug", "feature", "question", "docs" or "other".',
-    "- duplicates: earlier issues that a tool result showed you and that report the same problem: number, title, why (one sentence). Never this issue itself. [] if none.",
+    "- duplicates: earlier issues that a tool result showed you and that report the same problem with the same cause, so that one fix would close both: number, title, why (one sentence). Never this issue itself. An issue in the same area that differs is not a duplicate: if your why needs \"but\" or \"not\", leave it out. [] if none.",
     `- fixed_in: {version, evidence_url} only if a release note, commit or pull request you saw says it is fixed; evidence_url is that page on github.com/${repo}. Otherwise null.`,
     "- missing_info: what the reporter still has to add (version, full traceback, minimal example). [] if nothing.",
     "- labels: at most 3 labels for a maintainer to apply, such as bug, enhancement, question, documentation, duplicate.",
     '- repro: snippet = a short self-contained program copied from the issue that shows the problem (never invent one), or null; language = "python", "other" (a snippet in another language) or "none".',
-    `Write summary and missing_info in ${ISSUE_LANGUAGE}.`,
+    `Write summary, missing_info and every why in ${ISSUE_LANGUAGE}.`,
     "The final line of the user message, a bracketed run tag, is Porter's internal tag; never mention or repeat it.",
   ].join("\n");
 }
