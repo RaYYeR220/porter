@@ -619,6 +619,13 @@
 .ceiling-in {
   color: var(--ink-3);
 }
+.ceiling-in {
+  display: block;
+  margin-top: 2px;
+}
+.console-side .panel + .panel {
+  margin-top: 40px;
+}
 .ceiling-note {
   margin-top: 12px;
 }

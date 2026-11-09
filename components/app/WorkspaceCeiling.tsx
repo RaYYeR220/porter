@@ -63,7 +63,7 @@ export function WorkspaceCeiling() {
                 {ceiling.resetsAt ? (
                   <>
                     {stamp(ceiling.resetsAt)}
-                    {now ? <span className="ceiling-in"> · {resetText(ceiling.resetsAt, now).replace(/^resets /, "")}</span> : null}
+                    {now ? <span className="ceiling-in">{resetText(ceiling.resetsAt, now).replace(/^resets /, "")}</span> : null}
                   </>
                 ) : (
                   DASH
