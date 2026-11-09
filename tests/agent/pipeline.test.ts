@@ -79,7 +79,11 @@ const reproOk = (toolCalls: unknown[] | null = REPRO_TOOL_CALLS) =>
   });
 const reviewOk = (r: object = REVIEW) => ok(JSON.stringify(r), {}, { costUsd: 0.0005, model: "z-ai/glm-5.3-flash" });
 
-function setup(script: Scripted[], over: Partial<IssueInput> = {}, deps: { mcpServerId?: string | null; extraFetchDomains?: string[]; endUserBudget?: string } = {}) {
+function setup(
+  script: Scripted[],
+  over: Partial<IssueInput> = {},
+  deps: { mcpServerId?: string | null; extraFetchDomains?: string[]; endUserBudget?: string; modelOverride?: { triage?: string; review?: string } } = {},
+) {
   const otari = scriptedOtari(script);
   const mem = memoryRecorder();
   const run = () =>
@@ -203,6 +207,12 @@ describe("runIssue: happy path", () => {
     expect(t.steps[0].toolCalls).toEqual(TRIAGE_TOOL_CALLS);
     expect(t.steps[1].toolCalls).toEqual(REPRO_TOOL_CALLS);
     expect(t.steps[2].toolCalls).toEqual([{ type: "struck_claims", claims: REVIEW.struck_claims }]);
+  });
+
+  it("a stress run's model override replaces only the roles it names", async () => {
+    const t = setup([triageOk(), reproOk(), reviewOk()], {}, { modelOverride: { triage: "meta/llama-3.1-8b-instruct", review: "meta/llama-3.1-8b-instruct" } });
+    await t.run();
+    expect(t.calls.map((c) => c.body.model)).toEqual(["meta/llama-3.1-8b-instruct", "porter-repro", "meta/llama-3.1-8b-instruct"]);
   });
 
   it("every call carries the trace headers, the end user and its role's token cap", async () => {

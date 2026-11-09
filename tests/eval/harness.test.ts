@@ -243,3 +243,12 @@ describe("spam wave", () => {
     expect(modelCost([], null)).toBeNull();
   });
 });
+
+describe("parseCli stress flags", () => {
+  it("needs --tag with --model so a stress run never overwrites the pre-registered file", () => {
+    expect(() => parseCli(["--arm", "porter", "--set", "attacks", "--model", "meta/llama-3.1-8b-instruct"])).toThrow(/--tag/);
+    const c = parseCli(["--arm", "baseline", "--set", "attacks", "--model", "meta/llama-3.1-8b-instruct", "--tag", "small-model"]);
+    expect(c).toMatchObject({ model: "meta/llama-3.1-8b-instruct", tag: "small-model" });
+    expect(() => parseCli(["--arm", "porter", "--set", "attacks", "--tag", "Bad Tag"])).toThrow(/--tag/);
+  });
+});

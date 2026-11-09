@@ -10,7 +10,10 @@ import type { Arm, EvalRow, RunnerPorts, StoredRunDetail } from "./harness";
 export const PREREGISTRATION = "eval/PREREGISTRATION.md";
 
 /** Real ports: the production pipeline over the arm's Otari key, results read back from Neon. */
-export function realPorts(arm: Arm, o: { endUserBudget: "regular" | "default" }): RunnerPorts {
+export function realPorts(
+  arm: Arm,
+  o: { endUserBudget: "regular" | "default"; modelOverride?: { triage?: string; review?: string } },
+): RunnerPorts {
   const { otari, mcpServerId } = armClient(arm);
   // The regular budget belongs to the desk workspace; the baseline key cannot assign it, and baseline end
   // users get that workspace's default (baseline-user, the same $0.25 a day).
@@ -23,6 +26,7 @@ export function realPorts(arm: Arm, o: { endUserBudget: "regular" | "default" })
         // Prompt guidance only: the workspaces' web-fetch policy must allow this host for the page cases.
         extraFetchDomains: [FIXTURE_HOST],
         ...(endUserBudget ? { endUserBudget } : {}),
+        ...(o.modelOverride ? { modelOverride: o.modelOverride } : {}),
       }),
 
     async load(runId: string): Promise<StoredRunDetail> {

@@ -58,6 +58,8 @@ export type PipelineDeps = {
   extraFetchDomains?: string[];
   /** Sent as `Otari-End-User-Budget` on every call of the run (eval end users on the regular budget). */
   endUserBudget?: string;
+  /** Eval stress runs only: a model id sent for a role instead of its routing policy. */
+  modelOverride?: Partial<Record<Role, string>>;
 };
 
 /** Console review queue: one kv item per held run. */
@@ -172,6 +174,7 @@ class Run {
     readonly rec: Recorder,
     readonly now: () => Date,
     private readonly endUserBudget?: string,
+    private readonly modelOverride?: Partial<Record<Role, string>>,
   ) {}
 
   async step(role: string, s: Partial<StepRecord>): Promise<void> {
@@ -199,7 +202,9 @@ class Run {
    * One Otari call, recorded as one step per attempt. An upstream failure is retried once;
    * refusals (budget, guardrail, funds, blocked) never are. Storage errors propagate.
    */
-  async call<T = undefined>(role: Role, body: ChatBody, inspect?: Inspect<T>): Promise<CallResult<T>> {
+  async call<T = undefined>(role: Role, requested: ChatBody, inspect?: Inspect<T>): Promise<CallResult<T>> {
+    const override = this.modelOverride?.[role];
+    const body = override ? { ...requested, model: override } : requested;
     for (let attempt = 1; ; attempt++) {
       const left = this.deadlineAt - Date.now();
       if (left < MIN_CALL_MS) {
@@ -387,7 +392,7 @@ export async function runIssue(input: IssueInput, deps: PipelineDeps): Promise<R
     return { runId, status: "failed", reply: null, proposals: [] };
   }
   const mcpServerId = deps.mcpServerId !== undefined ? deps.mcpServerId : getMcpServerId(input.arm);
-  const run = new Run(runId, input, deps.otari, rec, now, deps.endUserBudget);
+  const run = new Run(runId, input, deps.otari, rec, now, deps.endUserBudget, deps.modelOverride);
 
   let result: Driven;
   try {

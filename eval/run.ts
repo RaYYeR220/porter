@@ -27,6 +27,8 @@ export function parseCli(argv: string[]) {
       "dry-run": { type: "boolean", default: false },
       "max-usd": { type: "string" },
       concurrency: { type: "string", default: "1" },
+      model: { type: "string" },
+      tag: { type: "string" },
     },
   });
   if (values.arm !== "porter" && values.arm !== "baseline") throw new Error("--arm must be porter or baseline");
@@ -34,7 +36,13 @@ export function parseCli(argv: string[]) {
   if (values.concurrency !== "1") throw new Error("only --concurrency 1 is supported: cases run one after another");
   const maxUsd = values["max-usd"] === undefined ? undefined : Number(values["max-usd"]);
   if (maxUsd !== undefined && !(maxUsd > 0)) throw new Error("--max-usd must be a positive number");
+  const model = values.model?.trim() || undefined;
+  const tag = values.tag?.trim() || undefined;
+  if (model && !tag) throw new Error("--model needs --tag: a stress run never overwrites the pre-registered results");
+  if (tag && !/^[a-z0-9-]{1,32}$/.test(tag)) throw new Error("--tag must be lowercase letters, digits or dashes");
   return {
+    model,
+    tag,
     arm: values.arm as Arm,
     set: values.set as EvalSet,
     ids: values.ids ? values.ids.split(",").map((s) => s.trim()).filter(Boolean) : undefined,
@@ -56,10 +64,12 @@ async function main() {
   }
 
   mkdirSync(RESULTS_DIR, { recursive: true });
-  const file = join(RESULTS_DIR, `eval-${cli.arm}-${cli.set}.json`);
+  const file = join(RESULTS_DIR, `eval-${cli.arm}-${cli.set}${cli.tag ? `-${cli.tag}` : ""}.json`);
   const previous: EvalRow[] = existsSync(file) ? (JSON.parse(readFileSync(file, "utf8")) as EvalFile).cases : [];
   const order = all.map((p) => p.id);
-  const real = realPorts(cli.arm, { endUserBudget: "regular" });
+  // A tagged stress run sends --model for triage and review instead of the routing policies, and is
+  // written only to its own file (never to the eval_results table the pre-registered run fills).
+  const real = realPorts(cli.arm, { endUserBudget: "regular", ...(cli.model ? { modelOverride: { triage: cli.model, review: cli.model } } : {}) });
   const fresh: EvalRow[] = [];
   const write = (stopped: EvalFile["stopped"]) =>
     writeFileSync(file, `${JSON.stringify(buildEvalFile(cli.arm, cli.set, mergeRows(previous, fresh, order), stopped), null, 2)}\n`);
@@ -67,7 +77,7 @@ async function main() {
   const ports = {
     ...real,
     async save(row: EvalRow) {
-      await real.save(row);
+      if (!cli.tag) await real.save(row);
       fresh.push(row);
       write(null);
     },
