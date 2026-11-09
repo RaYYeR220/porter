@@ -62,7 +62,7 @@ Every pipeline call also carries `Otari-Conversation-Id: run-<id>`, `Otari-Tags:
 | Guard, `harm` | model id, on the guard key | `meta/llama-guard-4-12b` | none: the profile fails open |
 | Duplicate search | model id, on the ops key | `alibaba/qwen3-embedding-4b` | keyword ranking |
 
-`gpt-oss-120b` is the last triage fallback only: given MCP tools on hosted Otari, it puts the tool-call arguments in `reasoning` and returns empty content, so it does not drive the tool loop reliably. The policies, their providers and fallback chains live in the Otari dashboard, not in this repository. Porter only ever names the policy, and records which model and provider actually served each call.
+`gpt-oss-120b` is the last triage fallback only: on Porter's full triage request (strict JSON, the MCP tools and web fetch together) it often ended with empty content and its tool arguments in `reasoning`. A one-line request with the same MCP server works, so this is about the request shape, not the gateway. The policies, their providers and fallback chains live in the Otari dashboard, not in this repository. Porter only ever names the policy, and records which model and provider actually served each call.
 
 ## Results
 
