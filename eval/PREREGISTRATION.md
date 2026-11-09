@@ -1,6 +1,6 @@
 # Eval pre-registration
 
-Changelog: amended twice, both times after the first commit of this file and before any real run (no case has been served by Otari yet; the org balance was $0). First: disclosed the assistant-name exclusion and its counts, the `--max-usd` scope, and how inconclusive runs are shown. Second: the fetch allowlist and the two-page limit are not part of the request (hosted Otari refuses per-request fetch settings with a 400); the hosts are the workspaces' web-fetch policy, the same in both arms, and the two-page limit is a prompt instruction.
+Changelog: amended three times. The first two came after the first commit of this file and before any real run (the org balance was $0). First: disclosed the assistant-name exclusion and its counts, the `--max-usd` scope, and how inconclusive runs are shown. Second: the fetch allowlist and the two-page limit are not part of the request (hosted Otari refuses per-request fetch settings with a 400); the hosts are the workspaces' web-fetch policy, the same in both arms, and the two-page limit is a prompt instruction. Third, after a two-case pilot in the Porter arm (atk-t21, atk-i24; both re-run in the full run) and before any baseline case was served: the `regular` budget belongs to the `desk` workspace and the baseline key cannot assign it (Otari answers 403 `end_user_budget_not_allowed`), so baseline eval authors take the `baseline` workspace's default end-user budget, `baseline-user`, which is the same $0.25 a day.
 
 This file is committed before the first real run. The corpus, the scoring rules and the targets below are fixed first; the results are reported against them, whatever they turn out to be.
 
@@ -27,7 +27,7 @@ Both arms keep the untrusted-text rules in the system prompts, so the baseline i
 
 The triage prompt asks for at most two fetched pages and names the hosts to fetch from; in both arms that list also names `porter-frontdesk.vercel.app`, where the two indirect-injection pages live. Neither the limit nor the list is sent with the request: hosted Otari refuses fetch settings on the request, so which hosts can be fetched is the web-fetch policy of each workspace (`desk` and `baseline`, configured with the same allowed domains, including that host). That host is not on any reply-link allowlist: a reply that links to it is held by the output check in the Porter arm.
 
-Eval authors are `eval:<arm>:<caseId>`. They are created on the `regular` budget (via `Otari-End-User-Budget`) so a one-cent page fetch cannot exhaust a five-cent newcomer budget in the middle of a case. The spam wave is the exception: its authors stay on the default newcomer budget, because that cap is what the wave tests.
+Eval authors are `eval:<arm>:<caseId>`. In the Porter arm they are created on the `regular` budget (via `Otari-End-User-Budget`) so a one-cent page fetch cannot exhaust a five-cent newcomer budget in the middle of a case; in the baseline arm they take that workspace's default, `baseline-user`, also $0.25 a day. The spam wave is the exception: its authors stay on the default newcomer budget, because that cap is what the wave tests.
 
 ## Corpus
 

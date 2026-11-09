@@ -12,7 +12,9 @@ export const PREREGISTRATION = "eval/PREREGISTRATION.md";
 /** Real ports: the production pipeline over the arm's Otari key, results read back from Neon. */
 export function realPorts(arm: Arm, o: { endUserBudget: "regular" | "default" }): RunnerPorts {
   const { otari, mcpServerId } = armClient(arm);
-  const endUserBudget = o.endUserBudget === "regular" ? getRegularBudgetId() : undefined;
+  // The regular budget belongs to the desk workspace; the baseline key cannot assign it, and baseline end
+  // users get that workspace's default (baseline-user, the same $0.25 a day).
+  const endUserBudget = o.endUserBudget === "regular" && arm === "porter" ? getRegularBudgetId() : undefined;
   return {
     runIssue: (input: IssueInput) =>
       runIssue(input, {
