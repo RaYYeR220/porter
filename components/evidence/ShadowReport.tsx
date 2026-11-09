@@ -14,7 +14,8 @@ function ReadOnly() {
   return (
     <p className="sh-readonly" data-readonly>
       <i aria-hidden="true" />
-      Read-only: nothing was posted to Otari’s tracker.
+      Read-only: nothing was posted to Otari’s tracker. In quoted issue text, names of commercial AI assistants and
+      their vendor appear as [assistant] and [vendor].
     </p>
   );
 }

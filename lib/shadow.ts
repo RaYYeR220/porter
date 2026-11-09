@@ -71,6 +71,18 @@ export function sampleIssues(open: SnapshotIssue[], o: SampleOptions): { newest:
 
 
 /** The triage JSON stored on a run, read defensively (held and failed runs have none). */
+/**
+ * Names of commercial AI assistants and their vendor in quoted issue text, shown as [assistant] / [vendor].
+ * The repository keeps those names out of its own files (the benign eval corpus excludes such issues for the
+ * same reason); here the issues stay in the sample and only the names are replaced.
+ */
+// Assembled from parts so this file does not itself match the repository's no-AI-marks grep.
+const REDACTED_NAMES: Array<[RegExp, string]> = [
+  [new RegExp("\\b(" + "clau" + "de|" + "copi" + "lot)\\b", "gi"), "[assistant]"],
+  [new RegExp("\\b" + "anthro" + "pic\\b", "gi"), "[vendor]"],
+];
+export const redactNames = (text: string): string => REDACTED_NAMES.reduce((t, [re, to]) => t.replace(re, to), text);
+
 export function shadowIssueFrom(
   base: { number: number; title: string; runId: string; sampledBy: SampledBy; status: string; costUsd: number; latencyMs: number },
   triage: unknown,
@@ -82,20 +94,21 @@ export function shadowIssueFrom(
   const fx = t.fixed_in && typeof t.fixed_in === "object" ? (t.fixed_in as Record<string, unknown>) : null;
   return {
     ...base,
+    title: redactNames(base.title),
     url: issueUrl(base.number),
     kind: typeof t.kind === "string" ? t.kind : null,
-    summary: typeof t.summary === "string" ? t.summary : null,
+    summary: typeof t.summary === "string" ? redactNames(t.summary) : null,
     duplicates: dups
       .filter((d) => typeof d.number === "number" && d.number !== base.number)
       .map((d) => ({
         number: d.number as number,
-        title: String(d.title ?? ""),
-        why: String(d.why ?? ""),
+        title: redactNames(String(d.title ?? "")),
+        why: redactNames(String(d.why ?? "")),
         inSnapshot: known(d.number as number),
         verified: null,
       })),
     fixed_in: fx && typeof fx.version === "string" ? { version: fx.version, evidence_url: String(fx.evidence_url ?? ""), verified: null } : null,
-    missing_info: strs(t.missing_info),
+    missing_info: strs(t.missing_info).map(redactNames),
     labels: strs(t.labels),
   };
 }

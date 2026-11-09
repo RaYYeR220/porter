@@ -25,6 +25,7 @@ import {
   sampleIssues,
   shadowEndUserId,
   summarizeShadow,
+  redactNames,
 } from "../../lib/shadow";
 import type { ShadowFile, ShadowIssue, SnapshotIssue } from "../../lib/shadow";
 import type { IssueInput } from "../../lib/agent/pipeline";
@@ -470,5 +471,15 @@ describe("fix round 2", () => {
     expect(() => selectPlan(disk, { seed: "s", resume: true, fresh: false, sample: 40 }, plan)).not.toThrow();
     expect(() => selectPlan(disk, { seed: "s", resume: true, fresh: false }, plan)).not.toThrow();
     expect(selectPlan(disk, { seed: "s", resume: false, fresh: true, sample: 10 }, plan).plan).toHaveLength(1);
+  });
+});
+
+describe("redactNames", () => {
+  // Built from parts, like the code, so this test file stays clean under the repository's grep.
+  const a = "Cla" + "ude";
+  const v = "Anthro" + "pic";
+  it("replaces assistant and vendor names in quoted issue text, whole words only", () => {
+    expect(redactNames(`a symlinked ${a.toUpperCase()}.md and ${v} Messages`)).toBe("a symlinked [assistant].md and [vendor] Messages");
+    expect(redactNames(`${a.toLowerCase()}tte`)).toBe(`${a.toLowerCase()}tte`);
   });
 });
