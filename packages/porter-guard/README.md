@@ -73,7 +73,7 @@ Real issue templates are full of HTML comments written for humans ("Ignore the a
 4. Two or more different signals appear.
 5. No classifier answered, with or without signals (fail closed).
 
-Otherwise it returns `valid: true` and names any weak signals in the explanation. `secrets` blocks on any secret signal. `harm` blocks when Llama Guard flags the text, and passes when it does not answer.
+Otherwise it returns `valid: true` and names any weak signals in the explanation. `secrets` blocks on any secret signal. `harm` blocks when Llama Guard flags the text, and passes when it does not answer. A verdict whose only category is S14 (code interpreter abuse) does not block: bug reports are code by nature, and a snippet only ever runs in Otari's isolated sandbox.
 
 The rules live in [`src/ensemble.ts`](src/ensemble.ts) and the detectors in [`src/detectors.ts`](src/detectors.ts). The tests in [`tests/`](tests) include the human template phrasings that must pass; run them with `pnpm test packages/porter-guard` from the repository root.
 

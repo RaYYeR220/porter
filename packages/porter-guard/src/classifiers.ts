@@ -33,9 +33,23 @@ export function parseQwen3Guard(raw: string): Parsed {
   return { flagged: false, score: 0.05 };
 }
 
+/**
+ * Llama Guard categories that do not hold an issue on their own. S14 (code interpreter abuse) fires on
+ * ordinary bug reports, which are code by nature, and a snippet only ever runs in Otari's isolated sandbox.
+ */
+const LLAMA_GUARD_IGNORED = new Set(["S14"]);
+
 export function parseLlamaGuard(raw: string): Parsed {
-  const first = raw.trim().split(/\s+/)[0]?.toLowerCase();
-  if (first === "unsafe") return { flagged: true, score: 0.9 };
+  const words = raw.trim().split(/\s+/);
+  const first = words[0]?.toLowerCase();
+  if (first === "unsafe") {
+    const codes = (words[1] ?? "")
+      .split(",")
+      .map((c) => c.trim().toUpperCase())
+      .filter((c) => /^S\d{1,2}$/.test(c));
+    if (codes.length > 0 && codes.every((c) => LLAMA_GUARD_IGNORED.has(c))) return { flagged: false, score: 0.2 };
+    return { flagged: true, score: 0.9 };
+  }
   if (first === "safe") return { flagged: false, score: 0.05 };
   return { flagged: null, score: null };
 }
