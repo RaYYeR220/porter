@@ -209,7 +209,7 @@ describe("runIssue: happy path", () => {
     const t = setup([triageOk(), reproOk(), reviewOk()]);
     const out = await t.run();
     const roles = ["triage", "repro", "review"];
-    const caps = [900, 700, 500];
+    const caps = [900, 700, 1200];
     t.calls.forEach((c, i) => {
       expect(c.opts.conversationId).toBe(`run-${out.runId}`);
       expect(c.opts.tags).toEqual({ app: "porter", role: roles[i], arm: "porter" });

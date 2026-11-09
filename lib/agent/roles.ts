@@ -4,7 +4,7 @@ export type Role = "triage" | "repro" | "review";
 export const ROLES: Record<Role, { model: string; maxTokens: number }> = {
   triage: { model: "porter-triage", maxTokens: 900 },
   repro: { model: "porter-repro", maxTokens: 700 },
-  review: { model: "porter-review", maxTokens: 500 },
+  review: { model: "porter-review", maxTokens: 1200 },
 };
 
 /** Gateway tool-loop rounds per role. The last round offers no tools and forces an answer. */
