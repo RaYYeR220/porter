@@ -78,7 +78,7 @@ function wave(limit: number): Built[] {
       {
         role: "triage",
         requestedModel: "porter-triage",
-        servedModel: tier ? "openai/gpt-oss-20b" : "openai/gpt-oss-120b",
+        servedModel: tier ? "deepseek/deepseek-v4-flash-0731" : "deepseek/deepseek-v4.1-flash-1017",
         provider: tier ? "deepinfra" : "nebius",
         attemptCount: 1,
         requestId: reqId(),
@@ -166,7 +166,7 @@ function repro(): Built {
       {
         role: "triage",
         requestedModel: "porter-triage",
-        servedModel: "openai/gpt-oss-120b",
+        servedModel: "deepseek/deepseek-v4.1-flash-1017",
         provider: "nebius",
         attemptCount: 1,
         requestId: reqId(),
@@ -226,7 +226,7 @@ function duplicate(): Built {
       {
         role: "triage",
         requestedModel: "porter-triage",
-        servedModel: "openai/gpt-oss-120b",
+        servedModel: "deepseek/deepseek-v4.1-flash-1017",
         provider: "nebius",
         attemptCount: 1,
         requestId: reqId(),
@@ -274,7 +274,7 @@ function outputHold(): Built {
       {
         role: "triage",
         requestedModel: "porter-triage",
-        servedModel: "openai/gpt-oss-120b",
+        servedModel: "deepseek/deepseek-v4.1-flash-1017",
         provider: "nebius",
         attemptCount: 1,
         requestId: reqId(),
@@ -312,7 +312,7 @@ function executed(): Built {
       {
         role: "triage",
         requestedModel: "porter-triage",
-        servedModel: "openai/gpt-oss-120b",
+        servedModel: "deepseek/deepseek-v4.1-flash-1017",
         provider: "nebius",
         attemptCount: 1,
         requestId: reqId(),

@@ -7,9 +7,11 @@ import { RUN_ID } from "./fixtures";
 
 describe("run helpers", () => {
   it("spots the tier-down model however the gateway prefixes it", () => {
-    expect(isTierDown("openai/gpt-oss-20b")).toBe(true);
-    expect(isTierDown("gpt-oss-20b")).toBe(true);
+    expect(isTierDown("deepseek/deepseek-v4-flash-0731")).toBe(true);
+    expect(isTierDown("deepseek-v4-flash-0731")).toBe(true);
+    expect(isTierDown("deepseek/deepseek-v4.1-flash-1017")).toBe(false);
     expect(isTierDown("openai/gpt-oss-120b")).toBe(false);
+    expect(isTierDown("deepseek/deepseek-v4-flash-0731x")).toBe(false);
     expect(isTierDown(null)).toBe(false);
   });
 

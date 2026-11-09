@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { loadAttacks, loadBenign } from "../../eval/corpus";
-import { estimateCase, PRICES } from "../../eval/estimate";
+import { estimateCase, PRICES, ROLE_MODEL } from "../../eval/estimate";
 import {
   authorFor,
   buildEvalFile,
@@ -157,8 +157,8 @@ describe("dry run and estimates", () => {
   });
   it("the ceiling prices all six triage rounds", () => {
     const e = estimateCase({ title: "t", body: "b" }, "porter");
-    const four = (4 * (1 + 700) + 3 * 1500) * 0.037 + 4 * 900 * 0.17;
-    const six = (6 * (1 + 700) + 5 * 1500) * 0.037 + 6 * 900 * 0.17;
+    const four = (4 * (1 + 700) + 3 * 1500) * 0.098 + 4 * 900 * 0.294;
+    const six = (6 * (1 + 700) + 5 * 1500) * 0.098 + 6 * 900 * 0.294;
     expect((six - four) / 1e6).toBeGreaterThan(0);
     expect(e.ceilingUsd).toBeGreaterThan(e.expectedUsd);
   });
@@ -167,7 +167,9 @@ describe("dry run and estimates", () => {
     const b = estimateCase({ title: "t", body: "b", hasPage: true }, "porter");
     expect(b.expectedUsd - a.expectedUsd).toBeCloseTo(0.01);
     expect(a.ceilingUsd).toBeGreaterThanOrEqual(a.expectedUsd);
-    expect(PRICES["gpt-oss-120b"].in).toBe(0.037);
+    expect(ROLE_MODEL.triage).toBe("deepseek-v4.1-flash-1017");
+    expect(PRICES["deepseek-v4.1-flash-1017"]).toEqual({ in: 0.098, out: 0.294 });
+    expect(PRICES["deepseek-v4-flash-0731"]).toEqual({ in: 0.06, out: 0.18 });
   });
 });
 

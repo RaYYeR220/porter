@@ -7,7 +7,7 @@ import { openIssueHref } from "../components/site/links";
 import { readAttackFigures } from "../lib/site/eval-figures";
 import "./landing.css";
 
-const STACK = ["gpt-oss-120b", "Qwen3Guard", "Llama Guard 4", "Qwen3-Embedding"];
+const STACK = ["deepseek-v4.1-flash", "Qwen3Guard", "Llama Guard 4", "Qwen3-Embedding"];
 
 /** What a stranger's issue touches, named in plain words, with the real identifiers underneath. */
 const RUNS: Array<{ name: string; what: string; ids: string }> = [
@@ -44,7 +44,7 @@ const RUNS: Array<{ name: string; what: string; ids: string }> = [
   {
     name: "Open-weight models, one job each",
     what: "One model triages, another writes the reply from the evidence, one reproduces bugs, three screen the input (two for injection, one for harm) and one finds duplicates.",
-    ids: "gpt-oss-120b · GLM-5.3-Flash · Qwen3-Coder · Qwen3Guard · gpt-oss-safeguard · Llama Guard 4 · Qwen3-Embedding",
+    ids: "DeepSeek V4.1 Flash · GLM-5.3-Flash · Qwen3-Coder · Qwen3Guard · gpt-oss-safeguard · Llama Guard 4 · Qwen3-Embedding",
   },
 ];
 
@@ -205,7 +205,7 @@ export default function Home() {
               </div>
               <p>A clean issue gets a reply from open-weight models, paid from its author’s own daily budget and nobody else’s.</p>
               <p className="data">
-                gpt-oss-120b · ≥80% → gpt-oss-20b
+                deepseek-v4.1-flash · ≥80% → deepseek-v4-flash
                 <br />
                 100% → refused · resets 00:00 UTC
               </p>

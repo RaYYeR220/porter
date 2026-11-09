@@ -19,7 +19,7 @@ const run = (n: number, over: Partial<RunRow> = {}): RunRow => ({
   totalCostUsd: 0.0012,
   createdAt: new Date(Date.UTC(2026, 10, 8, 10, 0, 60 - n)).toISOString(),
   finishedAt: null,
-  servedModel: "openai/gpt-oss-120b",
+  servedModel: "deepseek/deepseek-v4.1-flash-1017",
   pendingProposals: 0,
   heldBy: null,
   ...over,
@@ -27,7 +27,7 @@ const run = (n: number, over: Partial<RunRow> = {}): RunRow => ({
 
 const RUNS: RunRow[] = [
   run(1, { pendingProposals: 2 }),
-  run(2, { servedModel: "openai/gpt-oss-20b" }),
+  run(2, { servedModel: "deepseek/deepseek-v4-flash-0731" }),
   run(3, { status: "held_guardrail", servedModel: null, heldBy: "gateway" }),
   run(4, { status: "held_guardrail", heldBy: "output" }),
   run(5, { status: "held_guardrail", servedModel: null, heldBy: "gateway" }),
@@ -89,8 +89,8 @@ describe("console cold load", () => {
     expect(urls.find((u) => u.startsWith("/api/proposals"))).toBe("/api/proposals?status=pending&limit=50");
 
     // the queue's model column and marks come from the list itself
-    expect(screen.getAllByText("gpt-oss-120b").length).toBeGreaterThan(0);
-    expect(screen.getByText("gpt-oss-20b").className).toBe("is-tier");
+    expect(screen.getAllByText("deepseek-v4.1-flash-1017").length).toBeGreaterThan(0);
+    expect(screen.getByText("deepseek-v4-flash-0731").className).toBe("is-tier");
     expect(screen.getByText("2 waiting for approval")).toBeTruthy();
 
     // the scoreboard splits holds by heldBy

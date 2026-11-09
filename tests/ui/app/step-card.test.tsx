@@ -41,7 +41,7 @@ describe("StepCard", () => {
     const s = step({
       role: "triage",
       requestedModel: "porter-triage",
-      servedModel: "openai/gpt-oss-120b",
+      servedModel: "deepseek/deepseek-v4.1-flash-1017",
       provider: "groq",
       costUsd: 0.00042,
       durationMs: 2140,
@@ -49,7 +49,7 @@ describe("StepCard", () => {
     });
     const { container } = render(<StepCard step={s} index={1} />);
     expect(container.textContent).toContain("porter-triage");
-    expect(container.textContent).toContain("openai/gpt-oss-120b");
+    expect(container.textContent).toContain("deepseek/deepseek-v4.1-flash-1017");
     expect(container.textContent).toContain("groq");
     expect(container.textContent).toContain("$0.0004");
     expect(container.textContent).toContain("2.1 s");
@@ -61,7 +61,7 @@ describe("StepCard", () => {
     const s = step({
       role: "triage",
       requestedModel: "porter-triage",
-      servedModel: "openai/gpt-oss-120b",
+      servedModel: "deepseek/deepseek-v4.1-flash-1017",
       toolCalls: [
         { type: "mcp", server: "porter-repo", name: "search_issues", status: "ok", output: "x".repeat(900) },
         { id: "otari_wf_1", type: "web_fetch", status: "ok", url: "https://docs.example.org/export" },

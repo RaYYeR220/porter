@@ -26,13 +26,13 @@ export const heroData = heroJson as HeroData;
 
 /**
  * Facts the labels state. All are configuration, not measurements:
- * the porter-triage routing policy serves gpt-oss-120b and moves an author to gpt-oss-20b from 80% of
+ * the porter-triage routing policy serves DeepSeek V4.1 Flash and moves an author to DeepSeek V4 Flash from 80% of
  * their budget; end-user budgets reset daily at UTC midnight; a gateway hold never reaches the answering
  * model, so it spends no answer tokens (the guard's own classifiers still run).
  */
 export const FACTS = {
-  triageModel: "gpt-oss-120b",
-  tierDownModel: "gpt-oss-20b",
+  triageModel: "deepseek-v4.1-flash",
+  tierDownModel: "deepseek-v4-flash",
   tierDownAt: "≥80%",
   resets: "00:00 UTC",
 } as const;

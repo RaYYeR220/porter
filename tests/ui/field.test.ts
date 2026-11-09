@@ -14,9 +14,9 @@ const ALLOWED = [
   /^gateway$/,
   /^held · ([a-z_]+) · 0 answer tokens$/,
   /^held · 0 answer tokens$/,
-  /^(#\d+) · answered · gpt-oss-120b$/,
+  /^(#\d+) · answered · deepseek-v4\.1-flash$/,
   /^one author · own daily budget$/,
-  /^one author · ≥80% → gpt-oss-20b$/,
+  /^one author · ≥80% → deepseek-v4-flash$/,
   /^refused · resets 00:00 UTC$/,
 ];
 
@@ -75,8 +75,8 @@ describe("hero field", () => {
     // the loop shows the whole mechanism: a hold, an answer, a tier-down and a refusal
     const all = [...seen].join("\n");
     expect(all).toMatch(/^held · /m);
-    expect(all).toMatch(/answered · gpt-oss-120b/);
-    expect(all).toMatch(/→ gpt-oss-20b/);
+    expect(all).toMatch(/answered · deepseek-v4.1-flash/);
+    expect(all).toMatch(/→ deepseek-v4-flash/);
     expect(all).toMatch(/^refused · resets 00:00 UTC$/m);
   });
 

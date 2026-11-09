@@ -32,7 +32,7 @@ describe("landing page", () => {
     expect(screen.getByRole("link", { name: /Open a test issue/ }).getAttribute("href")).toBe("/try");
     expect(screen.getByRole("link", { name: "Try it without an account" }).getAttribute("href")).toBe("/try");
     const proof = screen.getByText("Running on otari.ai").parentElement as HTMLElement;
-    expect(proof.textContent?.replace(/\s+/g, " ")).toBe("Running on otari.ai · gpt-oss-120b · Qwen3Guard · Llama Guard 4 · Qwen3-Embedding");
+    expect(proof.textContent?.replace(/\s+/g, " ")).toBe("Running on otari.ai · deepseek-v4.1-flash · Qwen3Guard · Llama Guard 4 · Qwen3-Embedding");
     expect(screen.getByRole("img", { name: /gateway line/ })).toBeTruthy();
   });
 

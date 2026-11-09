@@ -53,7 +53,7 @@ describe("BudgetMeter", () => {
 
   it("says when the author is past the tier-down line and when the gateway refuses", () => {
     const tier = render(<BudgetMeter spendUsd={0.042} limitUsd={0.05} nextResetAt={RESET} now={NOW} />);
-    expect(tier.container.textContent).toContain("Past 80%: triage moves to gpt-oss-20b");
+    expect(tier.container.textContent).toContain("Past 80%: triage moves to deepseek-v4-flash-0731");
     expect(tier.container.querySelector(".meter-tier")).toBeTruthy();
     cleanup();
     const cap = render(<BudgetMeter spendUsd={0.051} limitUsd={0.05} nextResetAt={RESET} now={NOW} />);

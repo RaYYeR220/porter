@@ -107,7 +107,7 @@ describe("RunTimeline", () => {
   });
 
   it("marks the tier-down model and a fallback on the step", () => {
-    const tier = triageOk({ servedModel: "openai/gpt-oss-20b", fallback: true, attemptCount: 2 });
+    const tier = triageOk({ servedModel: "deepseek/deepseek-v4-flash-0731", fallback: true, attemptCount: 2 });
     const { container } = render(<RunTimeline detail={detail("answered", [tier], { reply: "ok" })} />);
     expect(text(container)).toContain("tier-down");
     expect(text(container)).toContain("fallback · attempt 2");

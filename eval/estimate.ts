@@ -4,13 +4,14 @@ import { MAX_BODY_CHARS } from "../lib/agent/triage";
 
 /**
  * Cost model for --dry-run and --max-usd. No Otari calls. Inputs:
- *  - catalog prices on 2026-11-07, USD per million tokens (in / out);
+ *  - catalog prices, USD per million tokens (in / out): triage models on 2026-11-09, the rest on 2026-11-07;
  *  - per-role max_tokens from lib/agent/roles.ts as the output ceiling of every call;
  *  - gateway tool fees: $0.01 per web fetch, $0.01 per code-execution run.
  * Guard-model calls bill to a separate workspace, so they are reported apart.
  */
 export const PRICES = {
-  "gpt-oss-120b": { in: 0.037, out: 0.17 },
+  "deepseek-v4.1-flash-1017": { in: 0.098, out: 0.294 },
+  "deepseek-v4-flash-0731": { in: 0.06, out: 0.18 },
   "glm-5.3-flash": { in: 0.15, out: 0.5 },
   "qwen3-coder-480b-turbo": { in: 0.3, out: 1.0 },
   "gpt-oss-safeguard-120b": { in: 0.15, out: 0.6 },
@@ -19,7 +20,7 @@ export const PRICES = {
 } as const;
 
 export const ROLE_MODEL: Record<Role, keyof typeof PRICES> = {
-  triage: "gpt-oss-120b",
+  triage: "deepseek-v4.1-flash-1017",
   repro: "qwen3-coder-480b-turbo",
   review: "glm-5.3-flash",
 };

@@ -38,12 +38,17 @@ export const ROLE_LABEL: Record<string, string> = {
   warning: "Note",
 };
 
-/** The cheaper model the porter-triage routing policy moves an author to near their cap. */
-export const TIER_DOWN_MODEL = "gpt-oss-20b";
+/** The cheaper model the porter-triage routing policy moves an author to near their cap (served as deepseek/deepseek-v4-flash-0731). */
+export const TIER_DOWN_MODEL = "deepseek-v4-flash-0731";
 export const TIER_DOWN_AT_PCT = 80;
 
-export const isTierDown = (servedModel: string | null | undefined) =>
-  typeof servedModel === "string" && new RegExp(`(^|/)${TIER_DOWN_MODEL}$`, "i").test(servedModel.trim());
+/** The served id, with or without its namespace ("deepseek/…"), is exactly the tier-down model. */
+export function isTierDown(servedModel: string | null | undefined): boolean {
+  if (typeof servedModel !== "string") return false;
+  const id = servedModel.trim().toLowerCase();
+  const want = TIER_DOWN_MODEL.toLowerCase();
+  return id === want || id.endsWith(`/${want}`);
+}
 
 /** The step where the gateway refused to pass the text to a model, if any. */
 export const gatewayHoldStep = (steps: Step[]) => steps.find((s) => s.errorKind === "guardrail_violation");
@@ -67,7 +72,7 @@ export function heldBeforeAnyAnswer(steps: Step[]): boolean {
   return !steps.slice(0, at).some((s) => s.servedModel !== null);
 }
 
-/** "openai/gpt-oss-120b" → "gpt-oss-120b" for tight columns; the trace keeps the full id. */
+/** "deepseek/deepseek-v4.1-flash-1017" → "deepseek-v4.1-flash-1017" for tight columns; the trace keeps the full id. */
 export const modelName = (id: string | null | undefined) => (id ? id.slice(id.lastIndexOf("/") + 1) : null);
 
 /** The served model of the run's triage call (the one the author's budget tier decides). */

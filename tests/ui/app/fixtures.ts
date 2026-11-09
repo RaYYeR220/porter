@@ -56,7 +56,7 @@ export const triageOk = (over: Partial<Step> = {}) =>
   step({
     role: "triage",
     requestedModel: "porter-triage",
-    servedModel: "openai/gpt-oss-120b",
+    servedModel: "deepseek/deepseek-v4.1-flash-1017",
     provider: "groq",
     requestId: "req_triage_1",
     costUsd: 0.00042,
