@@ -288,6 +288,19 @@ describe("runIssue: happy path", () => {
     expect(out.proposals).toEqual([]);
   });
 
+  it("shadow and eval runs store no proposals: they could never be approved", async () => {
+    for (const source of ["shadow", "eval"] as const) {
+      const t = setup([triageOk(), reproOk(), reviewOk()], { source, deliveryId: undefined });
+      const out = await t.run();
+      expect(out.status).toBe("answered");
+      // the outcome still says what Porter would have proposed; the store gets none of it
+      expect(out.proposals.map((p) => p.action)).toEqual(["add_labels", "close_as_duplicate"]);
+      expect(t.proposals).toEqual([]);
+      // the triage JSON, which the shadow report reads, is stored as before
+      expect(t.runs.get(out.runId)?.triage).toEqual(TRIAGE);
+    }
+  });
+
   it("no proposals for an issue without a number", async () => {
     const t = setup([triageOk(), reproOk(), reviewOk()], { number: null, source: "web", authorExternalId: "web:abc" });
     const out = await t.run();

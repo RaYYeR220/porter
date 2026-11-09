@@ -39,6 +39,7 @@ export type RunOutcome = {
   runId: string;
   status: RunStatus;
   reply: string | null;
+  /** What Porter proposes; stored for a maintainer only when `storesProposals(source)`. */
   proposals: Proposal[];
 };
 
@@ -378,6 +379,13 @@ async function drive(run: Run, opts: { mcpServerId: string | null; docsHosts: st
 }
 
 /**
+ * Shadow and eval runs target a repository no write tool will touch, so their proposals could never
+ * be approved: they stay in the outcome only. The shadow report reads labels and duplicates from the
+ * stored triage JSON, not from proposals.
+ */
+export const storesProposals = (source: IssueInput["source"]) => source !== "shadow" && source !== "eval";
+
+/**
  * Drives one issue: triage → repro (Python only) → review → output check → reply + proposals.
  * Gateway refusals become outcomes; nothing here posts to GitHub.
  */
@@ -397,7 +405,7 @@ export async function runIssue(input: IssueInput, deps: PipelineDeps): Promise<R
   let result: Driven;
   try {
     result = await drive(run, { mcpServerId, docsHosts: deps.docsHosts ?? [], extraFetchDomains: deps.extraFetchDomains ?? [] });
-    if (result.proposals.length > 0) await rec.addProposals(runId, result.proposals);
+    if (result.proposals.length > 0 && storesProposals(input.source)) await rec.addProposals(runId, result.proposals);
     await rec.finishRun(runId, {
       status: result.status,
       reply: result.reply,
