@@ -12,6 +12,7 @@ import { StatusBadge } from "../../components/app/StatusBadge";
 import type { Proposal, RunRow } from "../../components/app/types";
 import { useNow } from "../../components/app/useNow";
 import { usePoll } from "../../components/app/usePoll";
+import { WorkspaceCeiling } from "../../components/app/WorkspaceCeiling";
 
 const PAGE = 50;
 const SHOWN = 20;
@@ -85,10 +86,10 @@ function QueueRow({ row, now }: { row: RunRow; now: number }) {
 }
 
 /**
- * The maintainer's desk. A cold load is three reads: the runs list (GitHub and try-page runs unless
- * shadow and eval runs are asked for), the demo repository's pending proposals and the authors. A
- * run's details are read only when someone opens it, or once after a decision here, to show what the
- * maintainer key's tool call returned.
+ * The maintainer's desk. A cold load is four reads: the runs list (GitHub and try-page runs unless
+ * shadow and eval runs are asked for), the workspace ceiling, the demo repository's pending proposals
+ * and the authors. A run's details are read only when someone opens it, or once after a decision
+ * here, to show what the maintainer key's tool call returned.
  */
 export function Console() {
   const now = useNow();
@@ -279,32 +280,36 @@ export function Console() {
           )}
         </section>
 
-        <section className="panel proposals" aria-labelledby="proposals-title">
-          <div className="panel-head">
-            <h2 id="proposals-title" className="panel-title">
-              Waiting for approval
-            </h2>
-          </div>
-          <p className="panel-note">Labels and duplicate closes Porter proposed. Approving runs them with the maintainer key, not the stranger’s.</p>
-          {propErr && pending === null ? (
-            <Notice notice={noticeFor(propErr, "read")} />
-          ) : pending === null ? (
-            <div className="sk-rows" aria-busy="true">
-              <div className="sk sk-row" />
+        <div className="console-side">
+          <WorkspaceCeiling />
+
+          <section className="panel proposals" aria-labelledby="proposals-title">
+            <div className="panel-head">
+              <h2 id="proposals-title" className="panel-title">
+                Waiting for approval
+              </h2>
             </div>
-          ) : proposals.length === 0 ? (
-            <div className="empty">
-              <p className="empty-title">Nothing waiting.</p>
-              <p>Proposals come from answered GitHub issues. Issues filed on the try page get a reply only.</p>
-            </div>
-          ) : (
-            <ul className="props">
-              {proposals.map((p) => (
-                <ProposalRow key={p.id} proposal={p} showRun onDecided={onDecided(p)} />
-              ))}
-            </ul>
-          )}
-        </section>
+            <p className="panel-note">Labels and duplicate closes Porter proposed. Approving runs them with the maintainer key, not the stranger’s.</p>
+            {propErr && pending === null ? (
+              <Notice notice={noticeFor(propErr, "read")} />
+            ) : pending === null ? (
+              <div className="sk-rows" aria-busy="true">
+                <div className="sk sk-row" />
+              </div>
+            ) : proposals.length === 0 ? (
+              <div className="empty">
+                <p className="empty-title">Nothing waiting.</p>
+                <p>Proposals come from answered GitHub issues. Issues filed on the try page get a reply only.</p>
+              </div>
+            ) : (
+              <ul className="props">
+                {proposals.map((p) => (
+                  <ProposalRow key={p.id} proposal={p} showRun onDecided={onDecided(p)} />
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
       </div>
 
       <AuthorsPanel />

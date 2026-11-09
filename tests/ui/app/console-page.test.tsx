@@ -60,7 +60,9 @@ function stubApi() {
           ? { proposals: [PROPOSAL] }
           : url === "/api/authors"
             ? { authors: [] }
-            : { error: "not_found" };
+            : url === "/api/ceiling"
+              ? { ceiling: { remainingUsd: 0.67, limitUsd: null, usedUsd: 0.33, resetsAt: "2026-11-10T00:00:00.000Z", scope: "workspace", enforced: true } }
+              : { error: "not_found" };
       return new Response(JSON.stringify(body), { status: body && "error" in body ? 404 : 200 });
     }),
   );
@@ -76,15 +78,16 @@ describe("console cold load", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders queue, scoreboard and proposals from three reads, with no run details", async () => {
+  it("renders queue, scoreboard, ceiling and proposals from four reads, with no run details", async () => {
     const urls = stubApi();
     render(<Console />);
     await screen.findByRole("link", { name: "Issue 6" });
     await screen.findByText("Add a label to #1");
     await screen.findByText("No authors yet.");
+    await screen.findByText("$0.67");
 
-    expect(urls).toHaveLength(3);
-    expect(urls.map((u) => u.split("?")[0]).sort()).toEqual(["/api/authors", "/api/proposals", "/api/runs"]);
+    expect(urls).toHaveLength(4);
+    expect(urls.map((u) => u.split("?")[0]).sort()).toEqual(["/api/authors", "/api/ceiling", "/api/proposals", "/api/runs"]);
     expect(urls.some((u) => /^\/api\/runs\/[0-9a-f-]{36}/.test(u))).toBe(false);
     expect(urls.find((u) => u.startsWith("/api/proposals"))).toBe("/api/proposals?status=pending&limit=50");
 

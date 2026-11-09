@@ -91,3 +91,13 @@ export type Author = {
   blocked: boolean;
   refreshedAt: string | null;
 };
+
+/** GET /api/ceiling: the desk's daily ceiling at the gateway, as the strangers key sees it. */
+export type Ceiling = {
+  remainingUsd: number | null;
+  limitUsd: number | null;
+  usedUsd: number | null;
+  resetsAt: string | null;
+  scope: string | null;
+  enforced: boolean;
+};
