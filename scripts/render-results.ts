@@ -24,7 +24,8 @@ import {
   usd,
 } from "../lib/site/post-hoc";
 import type { PostHocData } from "../lib/site/post-hoc";
-import { loadPostHoc } from "../lib/site/results";
+import { loadPostHoc, loadShadowReport } from "../lib/site/results";
+import type { ShadowReport } from "../lib/site/results";
 
 export const START = "<!-- results:start -->";
 export const END = "<!-- results:end -->";
@@ -41,6 +42,8 @@ export type Results = {
   spam: Partial<Record<(typeof ARMS)[number], SpamResult>>;
   /** The post-hoc experiments, read and checked by the page loaders. */
   postHoc?: PostHocData[];
+  /** The read-only run over Otari's tracker, as /report/otari reads it. */
+  shadow?: Loaded<ShadowReport>;
 };
 
 function readJson<T>(path: string): T | undefined {
@@ -48,7 +51,7 @@ function readJson<T>(path: string): T | undefined {
 }
 
 export function loadResults(dir: string): Results {
-  const r: Results = { attacks: {}, benign: {}, spam: {}, postHoc: loadPostHoc(dir) };
+  const r: Results = { attacks: {}, benign: {}, spam: {}, postHoc: loadPostHoc(dir), shadow: loadShadowReport(dir) };
   for (const arm of ARMS) {
     r.attacks[arm] = readJson<EvalFile>(join(dir, `eval-${arm}-attacks.json`));
     r.benign[arm] = readJson<EvalFile>(join(dir, `eval-${arm}-benign.json`));
@@ -146,9 +149,9 @@ const ofN = (x: number, n: number) => `${x} of ${n}`;
 const POST_HOC_LEAD = "- **Post-hoc, not pre-registered:**";
 
 /**
- * Up to three lines for the top of the README, strongest honest result first: the smaller-model stress run
- * (post-hoc), the pre-registered attacks and false blocks, the request-capped spam wave (post-hoc). Each line
- * appears only when its files are complete; every number comes from them.
+ * Up to four lines for the top of the README, strongest honest result first: the smaller-model stress run
+ * (post-hoc), the pre-registered attacks and false blocks, the request-capped spam wave (post-hoc), the read-only
+ * run over Otari's tracker. Each line appears only when its files are complete; every number comes from them.
  */
 export function renderMeasured(r: Results): string {
   const lines: string[] = [];
@@ -188,7 +191,23 @@ export function renderMeasured(r: Results): string {
       );
     }
   }
+
+  if (r.shadow?.state === "ok") lines.push(shadowLine(r.shadow.data));
   return lines.length > 0 ? lines.join("\n") : "- Not run yet.";
+}
+
+/** The read-only run over Otari's tracker: outcomes, cost, and how many of its claims a person has checked. */
+function shadowLine({ file, summary: s }: ShadowReport): string {
+  const sampled = file.issues.every((i) => i.sampledBy.mode === "sample") ? " (a seeded sample)" : "";
+  const outcomes = [`${s.answered} answered`, `${s.held} held for a maintainer`, ...(s.refused > 0 ? [`${s.refused} refused`] : []), `${s.failed} failed`];
+  const claims =
+    s.checked === 0 || s.precision === null
+      ? `None of its ${s.claims} duplicate and fixed-in claims has been checked by hand yet.`
+      : `${s.checked} of its ${s.claims} duplicate and fixed-in claims checked by hand so far: ${Math.round(s.precision * 100)}% correct.`;
+  return (
+    `- **Read-only, on Otari's own tracker:** ${s.issues} open \`mozilla-ai/otari\` issues${sampled} went through Porter and nothing was posted: ` +
+    `${outcomes.join(", ")}, ${usd(s.costUsd)} in total. ${claims} [Report](https://porter-frontdesk.vercel.app/report/otari)`
+  );
 }
 
 /** Replaces the text between two markers; a README without them is left as it is. */

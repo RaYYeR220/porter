@@ -1,4 +1,4 @@
-import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -181,5 +181,27 @@ describe("what we measured, at the top of the README", () => {
     expect(loadStressFigures(dir)).toBeNull();
     smallModel();
     expect(loadStressFigures(dir)).toEqual({ cases: 2, baseline: 1, porter: 0, porterAtGateway: 1, baselineCanaryOnly: true });
+  });
+});
+
+describe("the read-only run over Otari's tracker, in the top list", () => {
+  it("comes last, with outcomes, cost and how many claims a person has checked, all from the file", () => {
+    copyFileSync(join(FIXTURES, "shadow-otari.json"), join(dir, "shadow-otari.json"));
+    const lines = renderMeasured(loadResults(dir)).split("\n");
+    expect(lines.at(-1)).toBe(
+      "- **Read-only, on Otari's own tracker:** 8 open `mozilla-ai/otari` issues (a seeded sample) went through Porter and nothing was posted: 6 answered, 1 held for a maintainer, 1 failed, $0.0303 in total. 3 of its 5 duplicate and fixed-in claims checked by hand so far: 67% correct. [Report](https://porter-frontdesk.vercel.app/report/otari)",
+    );
+  });
+
+  it("says no claim has been checked rather than showing a precision", () => {
+    const f = JSON.parse(readFileSync(join(FIXTURES, "shadow-otari.json"), "utf8"));
+    for (const i of f.issues) {
+      for (const d of i.duplicates) d.verified = null;
+      if (i.fixed_in) i.fixed_in.verified = null;
+    }
+    put("shadow-otari.json", f);
+    const last = renderMeasured(loadResults(dir)).split("\n").at(-1)!;
+    expect(last).toContain("None of its 5 duplicate and fixed-in claims has been checked by hand yet.");
+    expect(last).not.toMatch(/% correct/);
   });
 });
