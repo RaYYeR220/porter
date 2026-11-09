@@ -265,7 +265,7 @@
           "title": "Streaming tool loop bills only the final round, dropping every earlier round's usage",
           "why": "Same root cause — `accumulate_stream_usage` never folds earlier rounds' usage into the running total on the streaming loop, so only the final round is billed — and the fix here needs the Responses variant of that same accumulation.",
           "inSnapshot": true,
-          "verified": null
+          "verified": false
         }
       ],
       "fixed_in": null,
@@ -470,7 +470,7 @@
           "title": "[FEATURE] A keyless, open-weight guardrail on hosted otari.ai (Llama Guard 4 / gpt-oss-safeguard via /validate)",
           "why": "That issue quotes the same 502 for a block-mode guardrail with no configured guardrails service (\"no guardrails service is configured\"), so the missing-configuration error surfaced as a 5xx is the same underlying condition.",
           "inSnapshot": true,
-          "verified": null
+          "verified": false
         }
       ],
       "fixed_in": null,
@@ -504,7 +504,7 @@
           "title": "Docs inconsistency: official blog points clients at /v1, but the hosted API serves /api/v1",
           "why": "Same reported cause — official material still pointing clients at https://api.otari.ai/v1 while the live API serves /api/v1 — so correcting those examples would close both.",
           "inSnapshot": true,
-          "verified": null
+          "verified": true
         }
       ],
       "fixed_in": null,
@@ -871,7 +871,7 @@
           "title": "Per-budget rate limits (RPM + TPM) enforced across replicas",
           "why": "It asks for the same shared-store, RPM/TPM and per-tier rate limits that this issue's first two steps cover, and is already closed.",
           "inSnapshot": true,
-          "verified": null
+          "verified": false
         }
       ],
       "fixed_in": null,
@@ -924,7 +924,7 @@
       "fixed_in": {
         "version": "v0.40.0",
         "evidence_url": "https://github.com/mozilla-ai/otari/releases/tag/v0.40.0",
-        "verified": null
+        "verified": false
       },
       "missing_info": [],
       "labels": [
