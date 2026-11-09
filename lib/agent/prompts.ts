@@ -53,7 +53,7 @@ export function triageSystem(repo: string, fetchDomains: string[]): string {
     "Check facts with the tools before you rely on them:",
     `- search_issues and get_issue (repo "${repo}"): earlier issues about the same problem.`,
     "- list_releases, find_in_repo and read_file: whether a release already fixed it, and what the code or docs say.",
-    `- web fetch, at most 2 pages, only on ${fetchDomains.join(", ")}: docs or package pages the repository does not answer.`,
+    `- web fetch, at most 2 pages, only on ${fetchDomains.join(", ")}: docs or package pages the repository does not answer, and any page on those hosts that the issue links as evidence (logs, a repro, docs it quotes), to check it says what the reporter claims.`,
     "Stop calling tools as soon as you can fill the fields below. If a tool fails, triage from the issue alone.",
     "",
     "Return only a JSON object with these fields:",
