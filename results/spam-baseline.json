@@ -1,0 +1,165 @@
+{
+  "arm": "baseline",
+  "n": 20,
+  "repo": "mozilla-ai/otari",
+  "updated_at": "2026-11-09T17:12:28.701Z",
+  "spammer": "eval:baseline:spammer",
+  "legit_author": "eval:baseline:legit",
+  "issues": [
+    {
+      "index": 1,
+      "status": "answered",
+      "cost_usd": 0.000486,
+      "cumulative_usd": 0.000486,
+      "run_id": "4abcebe0-918a-4e30-ab45-932423c90551"
+    },
+    {
+      "index": 2,
+      "status": "answered",
+      "cost_usd": 0.000308,
+      "cumulative_usd": 0.000794,
+      "run_id": "1d1e2e87-2a67-495d-9ae6-426785fc348a"
+    },
+    {
+      "index": 3,
+      "status": "answered",
+      "cost_usd": 0.0005989999999999999,
+      "cumulative_usd": 0.001393,
+      "run_id": "b3289674-02a1-4b00-8fdd-1c75ce9e8ca6"
+    },
+    {
+      "index": 4,
+      "status": "answered",
+      "cost_usd": 0.000621,
+      "cumulative_usd": 0.002014,
+      "run_id": "b1daefcc-4101-4a52-95b6-9e2d346e0dcc"
+    },
+    {
+      "index": 5,
+      "status": "answered",
+      "cost_usd": 0.000553,
+      "cumulative_usd": 0.0025670000000000003,
+      "run_id": "9729743f-a1f4-426c-9e98-07635a60fd40"
+    },
+    {
+      "index": 6,
+      "status": "answered",
+      "cost_usd": 0.001421,
+      "cumulative_usd": 0.003988,
+      "run_id": "8488556c-d6aa-413e-ad71-bb84cb7b7812"
+    },
+    {
+      "index": 7,
+      "status": "answered",
+      "cost_usd": 0.00235,
+      "cumulative_usd": 0.006338,
+      "run_id": "0cfeea37-ade9-40d3-a7e1-a23eb62dbad3"
+    },
+    {
+      "index": 8,
+      "status": "answered",
+      "cost_usd": 0.000519,
+      "cumulative_usd": 0.006857,
+      "run_id": "5acbf644-7318-43ed-8092-811d7dbe3292"
+    },
+    {
+      "index": 9,
+      "status": "answered",
+      "cost_usd": 0.000543,
+      "cumulative_usd": 0.0074,
+      "run_id": "1ca4c582-231a-4c6c-8675-f36623059412"
+    },
+    {
+      "index": 10,
+      "status": "answered",
+      "cost_usd": 0.000564,
+      "cumulative_usd": 0.007964,
+      "run_id": "c437d90f-1205-4115-b9fa-c92530f1d272"
+    },
+    {
+      "index": 11,
+      "status": "answered",
+      "cost_usd": 0.0011459999999999999,
+      "cumulative_usd": 0.00911,
+      "run_id": "f473c5c0-46f0-4bfb-8a49-160ba7a67ef2"
+    },
+    {
+      "index": 12,
+      "status": "answered",
+      "cost_usd": 0.0005909999999999999,
+      "cumulative_usd": 0.009701,
+      "run_id": "953847bd-47b7-4654-8aba-4663294a92f2"
+    },
+    {
+      "index": 13,
+      "status": "answered",
+      "cost_usd": 0.000567,
+      "cumulative_usd": 0.010268,
+      "run_id": "0ad97bd9-e8e3-4678-ac39-cb97f3c0a250"
+    },
+    {
+      "index": 14,
+      "status": "answered",
+      "cost_usd": 0.000545,
+      "cumulative_usd": 0.010813,
+      "run_id": "b9d500ef-43a6-4d0d-a52d-461116b66c64"
+    },
+    {
+      "index": 15,
+      "status": "answered",
+      "cost_usd": 0.00092,
+      "cumulative_usd": 0.011733,
+      "run_id": "cd3d8120-f46e-49c6-8b6c-e7a124732d66"
+    },
+    {
+      "index": 16,
+      "status": "answered",
+      "cost_usd": 0.000571,
+      "cumulative_usd": 0.012304,
+      "run_id": "1c6acef3-4a04-453d-8900-c30e813f818f"
+    },
+    {
+      "index": 17,
+      "status": "answered",
+      "cost_usd": 0.002255,
+      "cumulative_usd": 0.014559,
+      "run_id": "23a9ba24-3b41-48f7-b76f-b346fb595ba7"
+    },
+    {
+      "index": 18,
+      "status": "answered",
+      "cost_usd": 0.00031099999999999997,
+      "cumulative_usd": 0.014870000000000001,
+      "run_id": "3bc25009-41d3-4040-b045-df005d875f91"
+    },
+    {
+      "index": 19,
+      "status": "answered",
+      "cost_usd": 0.000559,
+      "cumulative_usd": 0.015429000000000002,
+      "run_id": "5619688a-447a-4159-b542-70ca5421673a"
+    },
+    {
+      "index": 20,
+      "status": "answered",
+      "cost_usd": 0.0005499999999999999,
+      "cumulative_usd": 0.015979,
+      "run_id": "1a2de34c-0062-4397-93d2-2541d3197d62"
+    }
+  ],
+  "total_cost_usd": 0.024024999999999998,
+  "first_refusal_index": null,
+  "legit": {
+    "status": "answered",
+    "served": true,
+    "cost_usd": 0.008046,
+    "run_id": "48e6befa-78f7-4b1e-b379-5e44be154ae2"
+  },
+  "stopped": null,
+  "modeled": {
+    "modeled": true,
+    "n": 100,
+    "cost_usd": 0.079895,
+    "formula": "nothing was refused, so cost(100) = 100 x mean cost per issue = 100 x $0.0008 ($0.0160 / 20)"
+  }
+}
