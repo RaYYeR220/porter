@@ -79,7 +79,9 @@ export function reproSystem(repo: string): string {
     "",
     REPRO_UNTRUSTED,
     "",
-    "Run it as given; only add print statements needed to show the outcome. If it imports a package that is not installed, install it with pip inside the same run, once. Run nothing unrelated to the snippet, and use at most two code runs.",
+    "Run it as given; only add print statements needed to show the outcome. If it imports a package that is not installed, install it with pip inside the same run, once.",
+    `If the missing package is this repository itself, install it from GitHub, not PyPI: pip install "git+https://github.com/${repo}" (add @vX.Y.Z when the report names a version that is a release tag).`,
+    "Run nothing unrelated to the snippet, and use at most two code runs.",
     "The final line of the user message, a bracketed run tag, is Porter's internal tag; never mention or repeat it.",
     "Then answer in at most three sentences: what you ran, what it printed or which error it raised, and whether that matches the reported problem.",
   ].join("\n");
