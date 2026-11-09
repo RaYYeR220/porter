@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { endUserIdForLogin } from "../../lib/github/ids";
-import { applyProposal, executeCommand, parseCommand, rejectProposal } from "../../lib/github/commands";
+import { applyProposal, executeCommand, executionIdFor, parseCommand, rejectProposal } from "../../lib/github/commands";
 import type { ProposalStore, StoredProposal } from "../../lib/github/commands";
 
 describe("parseCommand", () => {
@@ -77,7 +77,7 @@ describe("applyProposal", () => {
       toolName: "add_labels",
       arguments: row.args,
       serverRevision: "rev-9",
-      clientExecutionId: "5",
+      clientExecutionId: executionIdFor(5),
       conversationId: "run-11111111-1111-1111-1111-111111111111",
     });
     expect(row.status).toBe("executed");
@@ -196,5 +196,14 @@ describe("rejectProposal / executeCommand", () => {
       store, otari: fakeMcp().otari, mcpServerId: "s", strangers: { endUsers: { put } as never }, regularBudgetId: () => "b",
     });
     expect(text).not.toContain("secret detail");
+  });
+});
+
+describe("executionIdFor", () => {
+  it("gives a stable RFC 4122 UUID per proposal, different across proposals", () => {
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+    expect(executionIdFor(6)).toMatch(uuid);
+    expect(executionIdFor(6)).toBe(executionIdFor(6));
+    expect(executionIdFor(6)).not.toBe(executionIdFor(7));
   });
 });

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { db as defaultDb } from "../db/client";
 import { proposals, runs } from "../db/schema";
@@ -104,12 +105,22 @@ export type ApplyDeps = {
   mcpServerId: string | null;
 };
 
+/**
+ * Otari's `client_execution_id` must be a UUID. Deriving it from the proposal id keeps it stable, so a
+ * second attempt at the same proposal reuses the same id instead of looking like a new execution.
+ */
+export function executionIdFor(proposalId: number): string {
+  const h = createHash("sha256").update(`porter-proposal:${proposalId}`).digest("hex");
+  const variant = ((parseInt(h[16], 16) & 0x3) | 0x8).toString(16);
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-5${h.slice(13, 16)}-${variant}${h.slice(17, 20)}-${h.slice(20, 32)}`;
+}
+
 const errMessage = (e: unknown) => (e instanceof Error ? `${e.name}: ${e.message}`.slice(0, 500) : "unknown error");
 
 /**
  * Executes a pending proposal through Otari's caller-orchestrated MCP under the maintainer key,
  * never through Octokit. The execute call is not retried (its outcome may be unknown), and the
- * proposal id is the client execution id.
+ * client execution id is derived from the proposal id.
  */
 export async function applyProposal(proposalId: number, decidedBy: string, deps: ApplyDeps): Promise<ApplyResult> {
   const p = await deps.store.load(proposalId);
@@ -132,7 +143,7 @@ export async function applyProposal(proposalId: number, decidedBy: string, deps:
       toolName: p.action,
       arguments: p.args,
       serverRevision: revision,
-      clientExecutionId: String(p.id),
+      clientExecutionId: executionIdFor(p.id),
       conversationId: `run-${p.runId}`,
     });
     if (result.isError) {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { handleProposalDecision, type ProposalDecisionDeps } from "../../lib/api/proposal-decision";
-import type { StoredProposal } from "../../lib/github/commands";
+import { executionIdFor, type StoredProposal } from "../../lib/github/commands";
 import { memoryLimiter, memoryProposalStore, req } from "./fakes";
 
 const DEMO = "acme/widgets";
@@ -39,7 +39,7 @@ describe("POST /api/proposals/:id", () => {
     const res = await t.post(1, { decision: "approve" });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, status: "executed" });
-    expect(t.executed).toEqual([expect.objectContaining({ toolName: "add_labels", clientExecutionId: "1" })]);
+    expect(t.executed).toEqual([expect.objectContaining({ toolName: "add_labels", clientExecutionId: executionIdFor(1) })]);
     expect(t.byId.get(1)?.decidedBy).toMatch(/^console:[0-9a-f]{8}$/);
     expect(t.byId.get(1)?.decidedBy).not.toContain("203.0.113.9");
   });
