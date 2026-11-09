@@ -225,6 +225,19 @@ class Run {
       }
       if (err instanceof OtariError) {
         const maybeServed = err.kind === "upstream" && SERVED_MAYBE.has(err.code ?? "");
+        console.warn(
+          JSON.stringify({
+            otari_error: {
+              role,
+              model: body.model,
+              status: err.status,
+              kind: err.kind,
+              code: err.code,
+              retryAfterSec: err.retryAfterSec,
+              requestId: err.requestId,
+            },
+          }),
+        );
         await this.step(role, {
           requestedModel: body.model,
           durationMs: ms,

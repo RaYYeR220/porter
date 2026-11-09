@@ -16,6 +16,7 @@ export class OtariError extends Error {
   budgetScope: string | null;
   retryAfterSec: number | null;
   guardrails: GuardrailViolation[];
+  requestId: string | null;
 
   constructor(init: {
     kind: OtariErrorKind;
@@ -25,6 +26,7 @@ export class OtariError extends Error {
     budgetScope?: string | null;
     retryAfterSec?: number | null;
     guardrails?: GuardrailViolation[];
+    requestId?: string | null;
   }) {
     super(init.message ?? `Otari ${init.status} ${init.code ?? init.kind}`);
     this.name = "OtariError";
@@ -34,6 +36,7 @@ export class OtariError extends Error {
     this.budgetScope = init.budgetScope ?? null;
     this.retryAfterSec = init.retryAfterSec ?? null;
     this.guardrails = init.guardrails ?? [];
+    this.requestId = init.requestId ?? null;
   }
 }
 
@@ -87,5 +90,6 @@ export function classifyOtariError(status: number, headers: Headers, bodyText: s
   else if (status >= 500 || status === 424) kind = "upstream";
   else kind = "other";
 
-  return new OtariError({ kind, status, code, budgetScope, retryAfterSec, guardrails });
+  const requestId = headers.get("Otari-Request-Id");
+  return new OtariError({ kind, status, code, budgetScope, retryAfterSec, guardrails, requestId });
 }
