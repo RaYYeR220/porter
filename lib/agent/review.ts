@@ -43,6 +43,24 @@ function outputText(v: unknown): string {
 }
 
 /** Gateway tool results from the triage loop, cut to what the reviewer needs to check claims. */
+/**
+ * Closed HTML comments removed: GitHub never shows them, issue templates are full of them, and they are
+ * where an instruction to the bot would hide. Other people's text that a tool returned reaches the
+ * reviewer as a reader of the page would see it. (The reporter's own issue is left whole for the guard.)
+ */
+export function stripHiddenComments(text: string): string {
+  let out = "";
+  let pos = 0;
+  for (;;) {
+    const start = text.indexOf("<!--", pos);
+    if (start < 0) return out + text.slice(pos);
+    const end = text.indexOf("-->", start + 4);
+    if (end < 0) return out + text.slice(pos);
+    out += text.slice(pos, start);
+    pos = end + 3;
+  }
+}
+
 export function evidenceSources(toolCalls: unknown): Source[] {
   let budget = SOURCES_TOTAL_CHARS;
   const out: Source[] = [];
@@ -50,7 +68,7 @@ export function evidenceSources(toolCalls: unknown): Source[] {
     const type = str(c.type) ?? "unknown";
     const base: Source = { type, status: str(c.status), error: str(c.error) ? cut(str(c.error)!, 300) : undefined };
     if (type === "mcp") {
-      const output = cut(outputText(c.output), Math.max(0, Math.min(SOURCE_OUTPUT_CHARS, budget)));
+      const output = cut(stripHiddenComments(outputText(c.output)), Math.max(0, Math.min(SOURCE_OUTPUT_CHARS, budget)));
       budget -= output.length;
       out.push({ ...base, name: str(c.name), output });
     } else if (type !== "code_execution") {
