@@ -334,7 +334,7 @@ async function drive(run: Run, opts: { mcpServerId: string | null; docsHosts: st
   if (shouldRepro(t.value)) {
     const r = await run.call("repro", buildReproRequest(input, run.id, t.value));
     if (!r.ok) return done(await run.settle(r.failure));
-    repro = extractRepro(r.data);
+    repro = extractRepro(r.data, t.value.repro.snippet ?? "");
   }
 
   // 3. Review: a different model family writes the reply from the evidence and strikes unsupported claims.
