@@ -1,6 +1,7 @@
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { copyFileSync, existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, relative } from "node:path";
+import { basename, dirname, join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import { applyBlock, END, loadResults, renderBlock, START } from "../../scripts/render-results";
 
@@ -31,6 +32,22 @@ function codePaths(md: string): string[] {
   return [...prose(md).matchAll(re)].map((m) => m[1]).filter((p) => !p.includes("<"));
 }
 
+/**
+ * The results files git tracks, copied to a temp folder. A run in progress writes untracked files into
+ * results/; the README is rendered from what is committed, so those are left out. Without git, results/ as is.
+ */
+function committedResultsDir(): string {
+  let tracked: string[];
+  try {
+    tracked = execFileSync("git", ["ls-files", "results"], { cwd: ROOT, encoding: "utf8" }).split("\n").filter(Boolean);
+  } catch {
+    return join(ROOT, "results");
+  }
+  const dir = mkdtempSync(join(tmpdir(), "porter-committed-results-"));
+  for (const file of tracked) copyFileSync(join(ROOT, file), join(dir, basename(file)));
+  return dir;
+}
+
 /** Cells per table row, ignoring escaped pipes: GitHub splits cells on every other pipe, even inside code. */
 const cells = (line: string) => line.replace(/\\\|/g, "").split("|").length - 2;
 
@@ -51,7 +68,7 @@ describe("docs: the README results block", () => {
   });
 
   it("is exactly what pnpm eval:render writes from the committed results", () => {
-    expect(applyBlock(readme, renderBlock(loadResults(join(ROOT, "results"))))).toBe(readme);
+    expect(applyBlock(readme, renderBlock(loadResults(committedResultsDir())))).toBe(readme);
   });
 
   it("renders cleanly with no results at all and changes nothing outside the markers", () => {
