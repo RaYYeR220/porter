@@ -1,0 +1,1017 @@
+{
+  "sampledAt": "2026-11-09T18:33:54.456Z",
+  "seed": "porter-shadow-v1",
+  "sample": 40,
+  "addedIds": [],
+  "snapshotAt": "2026-11-07T18:31:36.558Z",
+  "issues": [
+    {
+      "number": 2986,
+      "title": "[BUG] invalid_model for an unknown name doesn't mention routing policies or the key's workspace",
+      "runId": "0e0b87e1-0c34-44ee-afac-5ea1052d364a",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.0023769999999999998,
+      "latencyMs": 30305,
+      "url": "https://github.com/mozilla-ai/otari/issues/2986",
+      "kind": "bug",
+      "summary": "A hosted (EU) user reports that the 400 `invalid_model` response for a name that matches no selector, alias or policy says only 'provider:model' / alias / catalog id, and does not say the name could be a routing policy in the key's workspace — the only hint a caller gets, since a workspace key cannot list policies.",
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [],
+      "labels": [
+        "bug",
+        "enhancement"
+      ]
+    },
+    {
+      "number": 2985,
+      "title": "[BUG] Direct POST /search has no search tool on hosted, though in-loop otari_web_search works",
+      "runId": "d51e3ec1-f6af-4782-b4cb-3a08b9d1e5c5",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.003254,
+      "latencyMs": 37582,
+      "url": "https://github.com/mozilla-ai/otari/issues/2985",
+      "kind": "bug",
+      "summary": "On hosted otari.ai (EU, 2026-11-01), `POST /api/v1/search` returns 400 \"No search tools are configured\" even though the workspace's web search toggle is on and the in-loop `otari_web_search` tool works and is billed at $0.01; the reporter asks either that direct search use the same hosted backend at the same price, or that the hosted docs and the error message stop pointing at config files and env vars a hosted tenant cannot set.",
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [],
+      "labels": [
+        "bug",
+        "area/search",
+        "area/hosted"
+      ]
+    },
+    {
+      "number": 2984,
+      "title": "[BUG] Dashboard trace: \"Where the gateway stepped in\" says \"a later attempt answered\" when the only later attempt failed",
+      "runId": "7c21f5b0-4943-42bc-97a6-13d670a72a95",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.003254,
+      "latencyMs": 43067,
+      "url": "https://github.com/mozilla-ai/otari/issues/2984",
+      "kind": "bug",
+      "summary": "In the hosted dashboard trace for a routing-policy request, the \"Where the gateway stepped in\" panel says \"a later attempt answered\" even though every candidate failed and the request ended in 504. The reporter asks for wording driven by the final outcome, e.g. \"Fell back to gpt-oss-120b (DeepInfra); the fallback also failed (504)\".",
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [],
+      "labels": [
+        "bug",
+        "dashboard"
+      ]
+    },
+    {
+      "number": 2982,
+      "title": "[BUG] A guardrail block (403) doesn't say which check fired, so false positives can't be diagnosed",
+      "runId": "19faea05-ec98-43a0-af93-f9094bca74c3",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.003437,
+      "latencyMs": 41174,
+      "url": "https://github.com/mozilla-ai/otari/issues/2982",
+      "kind": "bug",
+      "summary": "A tenant of hosted otari.ai reports that a `403 guardrail_violation` response only names the profile, with `explanation: null` and `score: 1`, and asks for the category of the detector that fired (e.g. `prompt_attack`, `pii/phone_number`) so false positives from a Lakera Guard mandate can be diagnosed without exposing the vendor's raw message.",
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [],
+      "labels": [
+        "bug",
+        "guardrails"
+      ]
+    },
+    {
+      "number": 2981,
+      "title": "[BUG] A provider-narrowed spend ceiling on a routing policy's first candidate refuses the request instead of skipping to the fallback",
+      "runId": "a3cd486b-d66f-4f16-b2e2-a81e39408ddb",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.005895,
+      "latencyMs": 39503,
+      "url": "https://github.com/mozilla-ai/otari/issues/2981",
+      "kind": "bug",
+      "summary": "On hosted otari.ai, a routing policy's first candidate fails with a 403 budget_exceeded because a spend ceiling narrowed to provider instance `mistral` is exhausted, instead of skipping that candidate and serving the DeepInfra fallback as docs/routing.md describes. The reporter traces it to the up-front reserve_budget call in `_pipeline.py` re-raising for routing-policy plans and suggests naming the narrowed provider in the refusal.",
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [],
+      "labels": [
+        "bug",
+        "routing",
+        "budgets"
+      ]
+    },
+    {
+      "number": 2977,
+      "title": "Agent Guardrails docs contradict the code in five places, and the dry run does not match the hook",
+      "runId": "26db3902-9ba7-48bf-aabf-3a97bef014bd",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.0059640000000000006,
+      "latencyMs": 51684,
+      "url": "https://github.com/mozilla-ai/otari/issues/2977",
+      "kind": "bug",
+      "summary": "The reporter lists seven disagreements between the two Agent Guardrails docs pages and the code (one, the read-gate mitigation, already fixed on a branch); five doc statements are listed here, plus a real bug: `otari guardrails validate` submits only one path per edit target while `otari hook` submits both the lexical and resolved spellings, so a dry run can clear a gate (e.g. a symlinked `[assistant].md`) the hook refuses. It also asks whether a Codex Code Mode snippet reaches `command` gates, which needs a live session to settle.",
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [
+        "Which released version the reporter tested against (the `otari guardrails validate --path [assistant].md` versus `otari hook` mismatch).",
+        "A minimal repro for the symlink case: the policy file with the gate that forbids editing `[assistant].md`, the `ln -s AGENTS.md [assistant].md` setup, and the validate output vs the hook's refusal, since the body describes the scenario but gives no runnable steps or output."
+      ],
+      "labels": [
+        "bug",
+        "documentation",
+        "area/cli"
+      ]
+    },
+    {
+      "number": 2970,
+      "title": "Move provider error mapping out of the routes layer",
+      "runId": "c9e1ef78-63f8-4424-afa9-af19e8035180",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.001314,
+      "latencyMs": 25599,
+      "url": "https://github.com/mozilla-ai/otari/issues/2970",
+      "kind": "feature",
+      "summary": "Requests a refactor: move the provider-error mapping (ErrorKind, classify_provider_error, provider_error_headers, stream_error_code, stream_error_message, provider_failure_detail, failure_status_code, _stored_error_message, and the detail constants) out of api/routes/_pipeline.py into the providers domain, leaving only domain_error in the routes layer, with no behaviour change. It is split out of the larger #1199 module split.",
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [],
+      "labels": [
+        "area/refactor",
+        "type/tech-debt"
+      ]
+    },
+    {
+      "number": 2968,
+      "title": "Price each tool-loop round at its own context",
+      "runId": "12802ac2-f300-4fe9-affa-b6925e14c23b",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "failed",
+      "costUsd": 0.003046,
+      "latencyMs": 30680,
+      "url": "https://github.com/mozilla-ai/otari/issues/2968",
+      "kind": "feature",
+      "summary": "A request that runs gateway tools is settled once on usage summed across tool-loop rounds, so the long-context tier is chosen from the summed input; the reporter proposes keeping each round's usage and pricing each round at its own context, summed into the one row.",
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [],
+      "labels": [
+        "enhancement",
+        "pricing"
+      ]
+    },
+    {
+      "number": 2962,
+      "title": "Bedrock-served completions come back with id \"\" and created 0, and streamed chunks change id on every chunk",
+      "runId": "18e3f4ea-32f6-4d63-a2d1-3262767047e4",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.003547,
+      "latencyMs": 38021,
+      "url": "https://github.com/mozilla-ai/otari/issues/2962",
+      "kind": "bug",
+      "summary": "Bedrock-served chat and Messages responses come back with an empty `id` and `created: 0`, and streamed chat chunks each carry a new `chatcmpl-<timestamp>` id instead of one id per response, despite the docs promising a real id and timestamp. The reporter asks the gateway to mint an id and timestamp when Bedrock supplies none.",
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [
+        "The gateway version (or release tag) the requests were made against, since only the model ids and request ids are given."
+      ],
+      "labels": [
+        "bug",
+        "providers"
+      ]
+    },
+    {
+      "number": 2961,
+      "title": "/responses on a Nebius-first model always burns a failed attempt, then moves to a pricier provider, another model, or 502",
+      "runId": "97805480-d52b-4083-a691-8e413af57599",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.0038020000000000003,
+      "latencyMs": 92529,
+      "url": "https://github.com/mozilla-ai/otari/issues/2961",
+      "kind": "bug",
+      "summary": "On /responses, a model that Nebius serves fine through /chat/completions first fails the native Nebius Responses call (400 \"This model does not support Responses API\"), so the request burns an attempt and then falls over to a pricier provider, another model, or a 502 depending on the plan's other candidates; the reporter traced this to using_chat_completions_bridge trusting any-llm's SUPPORTS_RESPONSES for nebius and to _lacks_responses_route only handling an api_base 404/405/501.",
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [],
+      "labels": [
+        "bug",
+        "area/routing",
+        "area/providers"
+      ]
+    },
+    {
+      "number": 2960,
+      "title": "Streamed /responses tool loop drops the input tokens of every round but the last, so it is under-reported and under-billed",
+      "runId": "e5787b94-e401-48d2-b686-2084294e6b31",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.003003,
+      "latencyMs": 44200,
+      "url": "https://github.com/mozilla-ai/otari/issues/2960",
+      "kind": "bug",
+      "summary": "The reporter compares streamed and non-streamed `/responses` requests that run one MCP tool round, and finds that the streamed path's terminal usage (and the usage row) carries only the last round's input_tokens, so the loop is under-reported and under-billed. They point at `mcp_loop_responses.py`'s `accumulate_stream_usage`/`_with_earlier_output_tokens`, which fold only output tokens, while the non-streamed `_fold_usage` sums input too.",
+      "duplicates": [
+        {
+          "number": 1772,
+          "title": "Streaming tool loop bills only the final round, dropping every earlier round's usage",
+          "why": "Same root cause — `accumulate_stream_usage` never folds earlier rounds' usage into the running total on the streaming loop, so only the final round is billed — and the fix here needs the Responses variant of that same accumulation.",
+          "inSnapshot": true,
+          "verified": null
+        }
+      ],
+      "fixed_in": null,
+      "missing_info": [
+        "Otari version (or commit) the requests ran against, and the provider-side `Otari-Provider` shown on the requests"
+      ],
+      "labels": [
+        "bug"
+      ]
+    },
+    {
+      "number": 2959,
+      "title": "Bedrock-served streamed chat completions never carry usage.cost_usd or pricing_source",
+      "runId": "f4320e12-fd9a-43b8-a28d-9605f49fdfac",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.005894999999999999,
+      "latencyMs": 39574,
+      "url": "https://github.com/mozilla-ai/otari/issues/2959",
+      "kind": "bug",
+      "summary": "The reporter shows that on every Bedrock-served streamed chat completion the terminal usage chunk (which has a non-empty choices list and finishing reason null, sent after the finish_reason chunk) carries token counts but no usage.cost_usd or usage.pricing_source, although the request is priced; other providers (nebius, deepinfra) do carry them. They ask that the cost fields be attached to that chunk or that the chunk be reshaped to OpenAI's choices:[] form so the documented rule applies.",
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [],
+      "labels": [
+        "bug",
+        "streaming",
+        "pricing"
+      ]
+    },
+    {
+      "number": 2958,
+      "title": "Streamed chat-completion tool loop on Bedrock bills only the last round again (regression of #1772)",
+      "runId": "7228a826-2dd9-415e-8124-2fc36e5062f2",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.007364,
+      "latencyMs": 46365,
+      "url": "https://github.com/mozilla-ai/otari/issues/2958",
+      "kind": "bug",
+      "summary": "Le reporter affirme que, sur Bedrock, une requête streamée de chat completions avec une boucle d'outil MCP ne facture que le dernier tour : le chunk d'usage du tour 1 arrive sur un chunk ordinaire avant le chunk `stop` (et non comme un chunk `include_usage` à choix vides), donc l'accumulateur du PR #1789 ne le voit pas, alors que les surfaces non streamée et Messages somment bien les tours. Il fournit des traces d'usage comparées et une repro curl.",
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [],
+      "labels": [
+        "bug",
+        "usage",
+        "streaming"
+      ]
+    },
+    {
+      "number": 2957,
+      "title": "The catalog lists response_format for nvidia/nemotron-nano-3-30b, but its only offering rejects it, and a policy hides why",
+      "runId": "e448a9d0-de2b-4711-b148-2cf99bff4dd3",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "held_guardrail",
+      "costUsd": 0.003471,
+      "latencyMs": 30602,
+      "url": "https://github.com/mozilla-ai/otari/issues/2957",
+      "kind": "bug",
+      "summary": "The reporter says the catalog entry for nvidia/nemotron-nano-3-30b advertises response_format even though its only offering (Bedrock) rejects it, and that a Fallback policy surfaces this only as a bare all_candidates_rejected error with no per-candidate reason. They ask for the catalog to stop advertising parameters no offering accepts and for all_candidates_rejected to carry each candidate's own detail.",
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [],
+      "labels": [
+        "bug",
+        "area/models",
+        "enhancement"
+      ]
+    },
+    {
+      "number": 2956,
+      "title": "Through a routing policy, a request past max_tool_iterations fails with 422 instead of answering",
+      "runId": "ef3d4a65-776a-4dff-ab1a-4746da8a26c1",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.005072,
+      "latencyMs": 39618,
+      "url": "https://github.com/mozilla-ai/otari/issues/2956",
+      "kind": "bug",
+      "summary": "The reporter says that when a request goes through a routing policy (a Fallback policy) with MCP tools and exceeds max_tool_iterations, it fails with 422 \"Exceeded max_tool_iterations\" instead of getting the documented final no-tools round that produces an answer; naming the model directly worked 6/6, the policy failed 3/6 on hosted otari.ai, also with otari_code_execution.",
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [
+        "Whether the request used /v1/chat/completions or another endpoint (messages/responses), and whether it streamed",
+        "A minimal repro: the request body/payload shape (policy name, mcp_server_ids or mcp_servers, max_tool_iterations, tools) without private app code"
+      ],
+      "labels": [
+        "bug",
+        "routing",
+        "mcp"
+      ]
+    },
+    {
+      "number": 2955,
+      "title": "Request-body guardrail entry: `credential` is accepted but not sent to the service",
+      "runId": "cf4e6c79-9932-4898-9e14-100ed1de1e3c",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.0058119999999999995,
+      "latencyMs": 34826,
+      "url": "https://github.com/mozilla-ai/otari/issues/2955",
+      "kind": "bug",
+      "summary": "The reporter says a request-body `guardrails` entry accepts a `credential` field without error, but the credential is never sent as `Authorization: Bearer` to the entry's `url`, so a 401-protected guardrail service is reported as `unavailable`/`evaluation_failed`; only mandate entries (Organization, Guardrails) send their stored credential. They ask for the request-body entry to send the credential over https like a mandate, or to refuse it with a 400.",
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [],
+      "labels": [
+        "bug",
+        "enhancement"
+      ]
+    },
+    {
+      "number": 2954,
+      "title": "Code execution: a tool call with an empty program comes back as completed",
+      "runId": "294d412e-68eb-4170-b9fe-a9991b477ecb",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.0059180000000000005,
+      "latencyMs": 40896,
+      "url": "https://github.com/mozilla-ai/otari/issues/2954",
+      "kind": "bug",
+      "summary": "On hosted otari.ai, Nemotron 3 Super with `otari_code_execution` sometimes calls the tool with an empty `code` string, and `otari_tool_calls` reports that run as `status: \"completed\"` with exit code 0. The reporter asks that an empty program be refused with a model-visible tool error, or marked `failed`, reserving `completed` for programs that actually ran.",
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [
+        "Whether the empty call reproduces on the latest release (v0.40.0) or a self-hosted instance, not only hosted otari.ai",
+        "The full request body (prompt, tool declaration, streaming or not) and the complete `otari_tool_calls` array for request id f4f6eb3e-7f12-4d27-b44c-ed7d1b3bafa5, so maintainers can see whether the start and end entries both carry an empty `code`"
+      ],
+      "labels": [
+        "bug",
+        "enhancement"
+      ]
+    },
+    {
+      "number": 2944,
+      "title": "[FEATURE] Add a Perplexity provider to any-search",
+      "runId": "fbd9774c-66eb-44cc-92bd-ab6c8f597dfd",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.002768,
+      "latencyMs": 21955,
+      "url": "https://github.com/mozilla-ai/otari/issues/2944",
+      "kind": "feature",
+      "summary": "The reporter asks for a new `perplexity` provider in any-search that calls Perplexity's Search API (`POST https://api.perplexity.ai/search`), mapping `query`/`max_results` and the `search_domain_filter`, `country` and `search_type` options, modelled on the DeepSeek adapter, with one tool per `search_type` for pricing.",
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [
+        "A link or reference to the DeepSeek search adapter the proposal says to model (issue #2425 is not visible in the snapshot; the DeepSeek fetch adapter is documented in any-fetch/README.md, but the corresponding search adapter is not shown)"
+      ],
+      "labels": [
+        "enhancement",
+        "any-search"
+      ]
+    },
+    {
+      "number": 2937,
+      "title": "Hosted: guardrail mode block returns HTTP 502 \"no guardrails service is configured\" until a profile is set",
+      "runId": "526f3453-2ab1-4125-a4fb-a18b328b1308",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.003568,
+      "latencyMs": 31992,
+      "url": "https://github.com/mozilla-ai/otari/issues/2937",
+      "kind": "bug",
+      "summary": "On hosted otari.ai, with guardrail mode set to block and no guardrail profile configured, every chat completion returns HTTP 502 \"no guardrails service is configured\", which looks like an outage; the reporter asks for a 4xx/structured config error instead and for docs stating a profile (or service) is required before block mode works.",
+      "duplicates": [
+        {
+          "number": 2722,
+          "title": "[FEATURE] A keyless, open-weight guardrail on hosted otari.ai (Llama Guard 4 / gpt-oss-safeguard via /validate)",
+          "why": "That issue quotes the same 502 for a block-mode guardrail with no configured guardrails service (\"no guardrails service is configured\"), so the missing-configuration error surfaced as a 5xx is the same underlying condition.",
+          "inSnapshot": true,
+          "verified": null
+        }
+      ],
+      "fixed_in": null,
+      "missing_info": [
+        "The exact 502 response body and an affected request id/timestamp from the Wilding workspace",
+        "Which guardrail profile string was used in the failing block-mode request"
+      ],
+      "labels": [
+        "bug",
+        "area/guardrails"
+      ]
+    },
+    {
+      "number": 2936,
+      "title": "Hosted gateway: /v1 still 404s; docs/examples that say /v1 confuse Wilding integrators (follow-up to #2705)",
+      "runId": "2b0ef4f8-0abd-4cf7-a324-06c33eefd229",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "held_guardrail",
+      "costUsd": 0.003489,
+      "latencyMs": 27770,
+      "url": "https://github.com/mozilla-ai/otari/issues/2936",
+      "kind": "docs",
+      "summary": "Hosted-gateway integrators still hit a 404 on `https://api.otari.ai/v1` and are told to use `/api/v1`; the reporter asks that public docs and copy-paste examples for hosted otari.ai consistently use `/api/v1` and, optionally, that a \"base_url must end in /api/v1\" tip appear next to API key creation.",
+      "duplicates": [
+        {
+          "number": 2898,
+          "title": "Docs inconsistency: official blog points clients at /v1, but the hosted API serves /api/v1",
+          "why": "Same reported cause — official material still pointing clients at https://api.otari.ai/v1 while the live API serves /api/v1 — so correcting those examples would close both.",
+          "inSnapshot": true,
+          "verified": null
+        }
+      ],
+      "fixed_in": null,
+      "missing_info": [
+        "Which public docs, examples or notes in this repository (file paths or page URLs) still show `…/v1`; the issue names only third-party writeups and \"older notes\". The repo's own reference already says hosted otari.ai answers `https://api.otari.ai/v1/...` with a 404 and tells OpenAI-compatible clients"
+      ],
+      "labels": [
+        "documentation",
+        "question"
+      ]
+    },
+    {
+      "number": 539,
+      "title": "Persist the routing plan's rationale on the usage row",
+      "runId": "cd6bcbbc-7605-4aa4-b84c-0cf9a35f5602",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.002948,
+      "latencyMs": 24977,
+      "url": "https://github.com/mozilla-ai/otari/issues/539",
+      "kind": "feature",
+      "summary": "Asks to persist the learned router's decline rationale (`router_rationale`) and `router_confidence` from `CompiledPlan.router_ordering` onto `UsageLog`, and to surface them in `GET /v1/usage` and the Activity row detail, since today the reasons only reach a server log line and `selection_reason` shows only that the router declined, not why.",
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [],
+      "labels": [
+        "enhancement",
+        "routing",
+        "usage"
+      ]
+    },
+    {
+      "number": 787,
+      "title": "Batch authorization falls back to permissive when owner or workspace is unrecorded",
+      "runId": "ab2be917-1ec5-4bec-9b0b-552e7990ed92",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.013947,
+      "latencyMs": 36782,
+      "url": "https://github.com/mozilla-ai/otari/issues/787",
+      "kind": "bug",
+      "summary": "Reports that batch authorization in src/gateway/api/routes/batches.py falls back to allow when trusted attribution is missing: batches with no provider-side owner marker are readable by any authenticated key, and BatchRecord rows with a NULL workspace_id skip the workspace check; asks maintainers to choose between backfill-then-restrict, hard-restrict, or aging out the fallbacks.",
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [],
+      "labels": [
+        "bug",
+        "security",
+        "question"
+      ]
+    },
+    {
+      "number": 846,
+      "title": "[FEATURE] Document Authorization bearer authentication in OpenAPI",
+      "runId": "e56aedef-9d5c-4d85-995e-78f1b5d6eebe",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.00241,
+      "latencyMs": 28662,
+      "url": "https://github.com/mozilla-ai/otari/issues/846",
+      "kind": "feature",
+      "summary": "The reporter asks that the generated OpenAPI specification advertise the gateway's `Authorization: Bearer <token>` API-key authentication as an HTTP bearer security scheme, alongside the existing Otari-Key and x-api-key schemes, and that the OpenAPI and Postman artifacts be regenerated.",
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [],
+      "labels": [
+        "enhancement",
+        "documentation"
+      ]
+    },
+    {
+      "number": 879,
+      "title": "[FEATURE] Generic OIDC login for the standalone dashboard",
+      "runId": "2ae55ffb-8709-4a9c-ba8d-3bb9ea4c7fbd",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.001095,
+      "latencyMs": 18323,
+      "url": "https://github.com/mozilla-ai/otari/issues/879",
+      "kind": "feature",
+      "summary": "The reporter asks for a generic OIDC provider (e.g. Keycloak) as an additional standalone-dashboard login option, configured through the existing config layering, issuing the normal dashboard session cookie while keeping roster-based access and master-key break-glass. The issue is a detailed design proposal covering config surface, endpoints, identity mapping via userinfo, bootstrap contract, frontend button, testing and out-of-scope items.",
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [],
+      "labels": [
+        "enhancement"
+      ]
+    },
+    {
+      "number": 1058,
+      "title": "A bootstrap cannot contribute an Alembic migration chain",
+      "runId": "e072014a-5af7-4dda-bf50-5bdc1ed15e5f",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.005735,
+      "latencyMs": 49825,
+      "url": "https://github.com/mozilla-ai/otari/issues/1058",
+      "kind": "feature",
+      "summary": "The reporter asks for a way for a bootstrap-loaded module to own its own Alembic migration chain: today init_db upgrades only the hardcoded alembic/ directory against the shared alembic_version table, so a plugin cannot own tables without editing the repo. They propose a Container.contribute_migrations(MigrationContribution(name, script_location, version_table)) API, with unique non-default version tables and per-contribution chains run after Otari's own.",
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [],
+      "labels": [
+        "enhancement",
+        "open-core"
+      ]
+    },
+    {
+      "number": 1135,
+      "title": "Make the plugin system usable by several plugins and several teams",
+      "runId": "a7431216-734a-40b6-bd23-d373d4047776",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.004252000000000001,
+      "latencyMs": 30390,
+      "url": "https://github.com/mozilla-ai/otari/issues/1135",
+      "kind": "feature",
+      "summary": "The reporter asks for the plugin system to be reworked so that many plugins, written by separate teams, can coexist: a configurable ordered plugin list instead of a single `OTARI_BOOTSTRAP`, a richer `register` signature, a checked plugin-facing import surface, collision checks, plugin routes in generated OpenAPI/Postman artefacts, more backend contribution kinds, and a way for plugins to add dashboard surfaces.",
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [],
+      "labels": [
+        "enhancement",
+        "needs-decision",
+        "open-core"
+      ]
+    },
+    {
+      "number": 1191,
+      "title": "Config into per-domain settings models",
+      "runId": "eeec2f40-1a6d-442c-a52b-df8150934c1e",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.003954,
+      "latencyMs": 26876,
+      "url": "https://github.com/mozilla-ai/otari/issues/1191",
+      "kind": "feature",
+      "summary": "The issue asks to break the 2,675-line flat `core/config.py` into nested per-domain settings models (tools, budgets/pricing, providers/models, tenancy/auth, telemetry, platform) composed into `GatewayConfig`, with field aliases so every environment variable and `config.yml` key keeps resolving to the same field, in order of smallest domain first. It states acceptance criteria (identical variable/YAML keys, identical `GET /api/v1/settings` snapshot, `config.example.yml` meaning unchanged, OSS smoke gate passes) and ties itself to epic #1171.",
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [
+        "Which pydantic-settings version is installed, since the issue itself says the alias/nested-delimiter behaviour must be verified on it before the first PR",
+        "Whether the work is expected to land as one issue with several PRs or to be split into per-domain child issues"
+      ],
+      "labels": [
+        "enhancement",
+        "area/refactor",
+        "tech-debt"
+      ]
+    },
+    {
+      "number": 1222,
+      "title": "Lifespan startup can orphan background workers when one fails to start",
+      "runId": "2c5101b0-f82b-4984-99a1-208094294b23",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.002919,
+      "latencyMs": 23495,
+      "url": "https://github.com/mozilla-ai/otari/issues/1222",
+      "kind": "bug",
+      "summary": "The reporter notes that `_start_lifespan_workers` in `src/gateway/main.py` creates its tasks in a single comprehension, so if any worker's `start` raises, the lifespan never receives the handles to the tasks already created and its `finally` cannot cancel them. They propose starting workers inside the existing `try` or having the helper cancel what it created before re-raising, and ask for a test.",
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [],
+      "labels": [
+        "bug",
+        "area/backend"
+      ]
+    },
+    {
+      "number": 1371,
+      "title": "The dashboard cannot tell a policy that fell back from one that lost its primary",
+      "runId": "38fc6183-2751-448f-8d80-9382e143d7f7",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.003304,
+      "latencyMs": 31179,
+      "url": "https://github.com/mozilla-ai/otari/issues/1371",
+      "kind": "feature",
+      "summary": "A key's allow-list makes the routing compiler drop the policy's primary as `not_allowed` on every request, so the fallback serves every call with only a server log line to show it. The reporter asks that the Routing page compile a policy as a chosen key (using the unused `/routing/policies/explain` endpoint and `useExplainPolicy`) with dropped candidates and reasons, badge degraded policies, and that Activity rows distinguish a dropped primary from a fallback, requiring a persisted reason.",
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [],
+      "labels": [
+        "enhancement",
+        "area/observability",
+        "frontend"
+      ]
+    },
+    {
+      "number": 1580,
+      "title": "Ship the Alembic chain inside the gateway package so a wheel can migrate",
+      "runId": "83186e27-327c-4f97-81ca-6498b89452cd",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.004692,
+      "latencyMs": 35356,
+      "url": "https://github.com/mozilla-ai/otari/issues/1580",
+      "kind": "feature",
+      "summary": "The reporter asks that the Alembic chain move from the repo root into the gateway package (`src/gateway/migrations/`), as package data, so that `otari migrate` can run in-process and a wheel-only install can migrate and `otari serve`. They document the cause: `_run_migrations` resolves `parents[3] / \"alembic\"` and `otari migrate` shells out to the `alembic` binary reading `alembic.ini` from the cwd.",
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [],
+      "labels": [
+        "enhancement",
+        "area/backend",
+        "type/tech-debt"
+      ]
+    },
+    {
+      "number": 1600,
+      "title": "resolve_user_id renders two 5xx details that name internals",
+      "runId": "dc2f3f59-e5f9-4c41-ab35-9ca3d6c97226",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.014833,
+      "latencyMs": 52648,
+      "url": "https://github.com/mozilla-ai/otari/issues/1600",
+      "kind": "bug",
+      "summary": "The reporter asks for the two 5xx details that `resolve_user_id` produces (\"API key validation failed\" and \"API key has no associated user\") to stop reaching callers: make them domain errors with a fixed public detail per #1838 so `_tenancy_error_handler` renders them, drop the two constants and the callers that pass exceptions in, narrow the constant block's comment, and add a test for both conditions.",
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [],
+      "labels": [
+        "area/api",
+        "area/backend",
+        "type/tech-debt"
+      ]
+    },
+    {
+      "number": 1799,
+      "title": "[FEATURE] Register otari hook at user level with otari hook setup",
+      "runId": "c0ad56a3-699c-4f20-bafb-20bfa9bdcaa5",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.003773,
+      "latencyMs": 26394,
+      "url": "https://github.com/mozilla-ai/otari/issues/1799",
+      "kind": "feature",
+      "summary": "The reporter asks for a user-level mode of `otari hook setup` (e.g. `--user`) that writes the `PreToolUse`/`Stop` entries into the harness's user-level settings (such as `~/.[assistant]/settings.json`), with the widest matcher, a warning about double registration with per-repo entries, a decision on Codex user-level support, and matching doc updates.",
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [],
+      "labels": [
+        "enhancement",
+        "area/cli"
+      ]
+    },
+    {
+      "number": 1806,
+      "title": "[BUG] Command gate misses git commands called with global options",
+      "runId": "72d94fa9-9947-4e23-8bd3-71f2feb1d384",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.003564,
+      "latencyMs": 28715,
+      "url": "https://github.com/mozilla-ai/otari/issues/1806",
+      "kind": "bug",
+      "summary": "A `command` gate that forbids `git reset --hard` does not fire when git is invoked with global options between `git` and the subcommand (`git -C <path> reset --hard`, `--no-pager`, `-c ...`), so agents can bypass a destructive-command gate. The reporter asks the command gate to skip git's global options before matching, with `otari guardrails validate --command` agreeing with the hook.",
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [],
+      "labels": [
+        "bug",
+        "area/security",
+        "area/cli"
+      ]
+    },
+    {
+      "number": 1886,
+      "title": "Phone/tablet layout: PageIntro breakpoint, DisclosureRow status, keyboard hints on touch",
+      "runId": "e7b0df74-115f-4acb-8ed4-13fa11ba405c",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.002505,
+      "latencyMs": 20876,
+      "url": "https://github.com/mozilla-ai/otari/issues/1886",
+      "kind": "bug",
+      "summary": "Reports several phone (390px) and tablet (768px) layout problems in the dashboard: the off-screen empty-table message, overlapping Overview chart dates, Usage tables pushing numbers off-screen, pinned Accounts/Workspaces columns, PageIntro switching to a row too early, DisclosureRow keeping its status beside the label, and touch devices showing keyboard hints.",
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [
+        "Screenshots of each affected page at 390px and 768px showing the reported overflows"
+      ],
+      "labels": [
+        "bug",
+        "enhancement"
+      ]
+    },
+    {
+      "number": 1893,
+      "title": "Rate limits: a Postgres-backed store, and rules per provider key",
+      "runId": "304947dd-8eab-46c6-91af-0f7ff64bfc3e",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.0076500000000000005,
+      "latencyMs": 30459,
+      "url": "https://github.com/mozilla-ai/otari/issues/1893",
+      "kind": "feature",
+      "summary": "The reporter asks for a shared rate-limit store (memory and Redis adapters, `rate_limit_rpm` counted there), limit rules per key/user/model/provider key including TPM and concurrency, overflow routing to another model on a full limit, and optionally a Postgres store. The repository already has most of this: `RateLimitStorePort` with memory and Redis adapters, `rate_limits` rules (`per: key|user|deployment|model|budget` with rpm, tpm, max_concurrent), and per-model routing that spills to the next candidate. What remains is a Postgres adapter.",
+      "duplicates": [
+        {
+          "number": 399,
+          "title": "Per-budget rate limits (RPM + TPM) enforced across replicas",
+          "why": "It asks for the same shared-store, RPM/TPM and per-tier rate limits that this issue's first two steps cover, and is already closed.",
+          "inSnapshot": true,
+          "verified": null
+        }
+      ],
+      "fixed_in": null,
+      "missing_info": [],
+      "labels": [
+        "enhancement",
+        "area/backend",
+        "duplicate"
+      ]
+    },
+    {
+      "number": 1919,
+      "title": "Build budget alerts as a core feature in the registry",
+      "runId": "27dd1a34-efa3-4f78-a89d-b6e993c16608",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.0055650000000000005,
+      "latencyMs": 29556,
+      "url": "https://github.com/mozilla-ai/otari/issues/1919",
+      "kind": "feature",
+      "summary": "The reporter asks for budget alerts to be built as a core feature in the new core feature registry, split into an `alerts` domain (destinations, rules, send-once delivery, test send) and a budget trigger in the budgets domain, switched by `alert_evaluation_interval_sec`. It follows from #1173, which built the registry, and reuses #1091's unmerged code.",
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [],
+      "labels": [
+        "enhancement",
+        "area/backend"
+      ]
+    },
+    {
+      "number": 1991,
+      "title": "No activation event when an organization configures its first guardrail",
+      "runId": "ec645015-2ce7-476d-be36-8d043062a442",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.0029530000000000003,
+      "latencyMs": 24519,
+      "url": "https://github.com/mozilla-ai/otari/issues/1991",
+      "kind": "feature",
+      "summary": "The reporter asks that organisations configuring their first guardrail emit an activation signal: add `FIRST_GUARDRAIL_CONFIGURED` to `GrowthActivationEvent`, call `record_activation` from the organization guardrail create route on first occurrence, and land the hosted overlay label mapping with the pin bump.",
+      "duplicates": [],
+      "fixed_in": {
+        "version": "v0.40.0",
+        "evidence_url": "https://github.com/mozilla-ai/otari/releases/tag/v0.40.0",
+        "verified": null
+      },
+      "missing_info": [],
+      "labels": [
+        "enhancement"
+      ]
+    },
+    {
+      "number": 2127,
+      "title": "Agent Auth in Otari",
+      "runId": "199f6b92-c64c-4b88-8386-6416b6a70adf",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.000835,
+      "latencyMs": 15522,
+      "url": "https://github.com/mozilla-ai/otari/issues/2127",
+      "kind": "feature",
+      "summary": "The reporter proposes introducing an auth layer in Otari for agent use: per-user OAuth credential management (consent flows, encrypted storage, refresh, revocation, isolation), replacing the current single-shared-login-per-workspace MCP server model, partly reusing the existing Octonous implementation.",
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [],
+      "labels": [
+        "enhancement",
+        "agent",
+        "auth"
+      ]
+    },
+    {
+      "number": 2310,
+      "title": "Catalog IDs fail for a couple of minutes after a restart",
+      "runId": "d5de9d60-059c-40f2-8902-2b1c973cda32",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.001667,
+      "latencyMs": 29063,
+      "url": "https://github.com/mozilla-ai/otari/issues/2310",
+      "kind": "bug",
+      "summary": "Tras reiniciar, Otari empieza a servir antes de que su catálogo (qué proveedor sirve qué modelo) esté construido; en esa ventana un ID de catálogo como `[vendor]/[assistant]-sonnet-5.5` no se reconoce y se envía tal cual a [vendor] sin fallback, con 424 durante unos 2 minutos en Octnous. Propone construir el catálogo antes de aceptar peticiones, con un timeout, para que no exista esa ventana y los despliegues no muevan tráfico hasta que la instancia nueva esté lista.",
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [
+        "Versión de Otari y forma de despliegue (imagen/tag, plataforma) con la que se reprodujo",
+        "Ejemplo mínimo de la petición que devolvió 424 y los logs del arranque mostrando cuándo terminó de construirse el catálogo"
+      ],
+      "labels": [
+        "bug",
+        "area/backend"
+      ]
+    },
+    {
+      "number": 2818,
+      "title": "`OTARI_CONFIG_PATH` is only read by docker-compose, so `docker run -e OTARI_CONFIG_PATH=...` starts without a config",
+      "runId": "b288f4e0-3dd2-4f09-a8d0-d99d0e99c850",
+      "sampledBy": {
+        "seed": "porter-shadow-v1",
+        "mode": "sample",
+        "at": "2026-11-09T18:33:54.456Z"
+      },
+      "status": "answered",
+      "costUsd": 0.004824999999999999,
+      "latencyMs": 35381,
+      "url": "https://github.com/mozilla-ai/otari/issues/2818",
+      "kind": "bug",
+      "summary": "The reporter shows that `OTARI_CONFIG_PATH` is only interpolated by `docker-compose.yml` and never read by the gateway: `otari serve` declares `--config` without `envvar=`, so `docker run -e OTARI_CONFIG_PATH=...` (or `OTARI_CONFIG_PATH=... otari serve` on a host) boots with no config file and no warning. They propose either wiring the env var into the click options (serve/init-db/migrate) or renaming it and documenting that it is Compose-only.",
+      "duplicates": [],
+      "fixed_in": null,
+      "missing_info": [],
+      "labels": [
+        "bug",
+        "documentation"
+      ]
+    }
+  ],
+  "totals": {
+    "answered": 37,
+    "held": 2,
+    "refused": 0,
+    "failed": 1,
+    "costUsd": 0.17567600000000005,
+    "duplicatesClaimed": 4,
+    "fixedInClaimed": 1
+  }
+}
