@@ -57,7 +57,7 @@ flowchart LR
   guard --> db
 ```
 
-Every arrow is wired in code and registered outside it: the GitHub App is installed on the demo repository, the stored MCP server `porter-repo` is connected in `desk` and `baseline`, and porter-guard is an org-level guardrail, mandated on workspace `desk`, with its base URL `https://<host>/api/guard` as the endpoint (Otari posts to `/validate` under it). Live runs have used every arrow except approval, `/mcp/execute` on the maintainer key and the write it makes, which waits for the first maintainer decision; [JUDGES.md](../JUDGES.md#what-is-live) links the runs.
+Every arrow is wired in code and registered outside it: the GitHub App is installed on the demo repository, the stored MCP server `porter-repo` is connected in `desk` and `baseline`, and porter-guard is an org-level guardrail, mandated on workspace `desk`, with its base URL `https://<host>/api/guard` as the endpoint (Otari posts to `/validate` under it). Live runs have used every arrow, approval included: proposal 6 on porter-demo#11 ran through `/mcp/execute` on the maintainer key and applied its labels. [JUDGES.md](../JUDGES.md#what-is-live) links the runs.
 
 ## Trust boundaries
 
