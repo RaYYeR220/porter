@@ -11,6 +11,7 @@ import { ratelimit } from "../ratelimit";
 import type { TryDeps } from "../try/handler";
 import { dailySalt } from "./common";
 import type { AuthorActionDeps } from "./author-actions";
+import type { CeilingDeps } from "./ceiling";
 import type { ProposalDecisionDeps } from "./proposal-decision";
 import { drizzleProposalsReadStore, type ProposalsListDeps } from "./proposals-list";
 import { drizzleRunsStore } from "./runs";
@@ -68,6 +69,11 @@ export const productionApi = {
       },
       defer,
     };
+  },
+
+  ceiling(): CeilingDeps {
+    // Lazy: a missing Otari key becomes "unavailable", not a failed console.
+    return { kv: drizzleKv(), keyBudget: () => armClient("porter").otari.keyBudget() };
   },
 
   proposalsList(): ProposalsListDeps {

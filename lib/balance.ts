@@ -32,6 +32,47 @@ export function tightestRemainingUsd(b: KeyBudget): number | null {
   return known.length > 0 ? Math.min(...known) : null;
 }
 
+export type WorkspaceCeiling = {
+  /** The tightest USD the strangers key may still spend: the figure the /try floor reads. */
+  remainingUsd: number | null;
+  /** The limit that figure comes from, as the gateway reports it (a workspace limit may have none). */
+  limitUsd: number | null;
+  usedUsd: number | null;
+  /** When that limit resets, ISO in UTC. */
+  resetsAt: string | null;
+  scope: string | null;
+  enforced: boolean;
+};
+
+const iso = (v: unknown): string | null => {
+  if (typeof v !== "string" || v.trim() === "") return null;
+  const t = Date.parse(v);
+  return Number.isNaN(t) ? null : new Date(t).toISOString();
+};
+
+/**
+ * The desk's daily ceiling from `GET /key/budget` on the strangers key: what is left, and the limit
+ * it comes from (the tightest one, else the workspace one, else the first). Only these fields leave
+ * the server.
+ */
+export function workspaceCeiling(b: KeyBudget): WorkspaceCeiling {
+  const limits = (Array.isArray(b.limits) ? b.limits : []).filter(
+    (l): l is Record<string, unknown> => !!l && typeof l === "object" && !Array.isArray(l),
+  );
+  const withRemaining = limits.filter((l) => num(l.remaining_usd) !== null);
+  const tightest = withRemaining.sort((x, y) => (num(x.remaining_usd) as number) - (num(y.remaining_usd) as number))[0];
+  const pick = tightest ?? limits.find((l) => l.scope === "workspace") ?? limits[0] ?? null;
+  const earliest = limits.map((l) => iso(l.resets_at)).filter((v): v is string => v !== null).sort()[0] ?? null;
+  return {
+    remainingUsd: tightestRemainingUsd(b),
+    limitUsd: pick ? num(pick.limit_usd) : null,
+    usedUsd: pick ? num(pick.used_usd) : null,
+    resetsAt: (pick ? iso(pick.resets_at) : null) ?? earliest,
+    scope: pick && typeof pick.scope === "string" ? pick.scope : null,
+    enforced: b.budgets_enforced === true,
+  };
+}
+
 /**
  * Should /try refuse right now? Yes when a 402 was seen in the last 10 minutes (kv flag set by the
  * pipeline) or the stranger key's tightest remaining headroom is below the floor. The keyBudget
