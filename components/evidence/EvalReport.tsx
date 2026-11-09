@@ -1,8 +1,9 @@
 import { repoFile } from "../site/links";
-import { ARMS, LAYERS, LAYER_COPY, NOT_RUN_SENTENCE, headlineSentence } from "../../lib/site/evidence";
-import type { EvalResults } from "../../lib/site/evidence";
+import { ARMS, LAYERS, LAYER_COPY, NOT_RUN_SENTENCE, headlineSentence, okData } from "../../lib/site/evidence";
+import type { EvalResults, Loaded } from "../../lib/site/evidence";
 import type { PostHocData } from "../../lib/site/post-hoc";
 import type { CorpusSummary } from "../../lib/site/results";
+import { checkTargets } from "../../lib/site/targets";
 import { ArmCompare } from "./ArmCompare";
 import { LayerTable } from "./LayerTable";
 import { PostHocReport } from "./PostHoc";
@@ -17,12 +18,31 @@ const kindRank = (k: string) => (KIND_ORDER.includes(k) ? KIND_ORDER.indexOf(k) 
 
 const TOOL_LABEL: Record<string, string> = { add_labels: "add labels", close_as_duplicate: "close as duplicate", post_comment: "post a comment" };
 
-function Method({ corpus, results }: { corpus: CorpusSummary; results: EvalResults }) {
+/** Every results file that is there, pre-registered, post-hoc and shadow, once each. */
+function rawFiles(results: EvalResults, postHoc: PostHocData[], shadow: Loaded<unknown> | undefined): string[] {
+  const all: Array<Loaded<unknown>> = [
+    ...ARMS.flatMap((a) => [results.attacks[a], results.benign[a], results.spam[a]]),
+    ...postHoc.flatMap((d) => d.runs.map((r) => r.loaded as Loaded<unknown>)),
+    ...(shadow ? [shadow] : []),
+  ];
+  return [...new Set(all.filter((l) => l.state !== "missing").map((l) => l.file))];
+}
+
+function Method({
+  corpus,
+  results,
+  postHoc = [],
+  shadow,
+}: {
+  corpus: CorpusSummary;
+  results: EvalResults;
+  postHoc?: PostHocData[];
+  shadow?: Loaded<unknown>;
+}) {
   const m = corpus.meta;
   const writeTotal = Object.values(corpus.goals.write_tool).reduce((s, n) => s + n, 0);
-  const files = [
-    ...ARMS.flatMap((a) => [results.attacks[a], results.benign[a], results.spam[a]]),
-  ].filter((l) => l.state !== "missing");
+  const files = rawFiles(results, postHoc, shadow);
+  const targets = checkTargets(okData(results.attacks.porter), okData(results.benign.porter), okData(results.spam.porter));
   const general = corpus.benign.general;
   return (
     <dl className="mt">
@@ -30,8 +50,10 @@ function Method({ corpus, results }: { corpus: CorpusSummary; results: EvalResul
         <dt>Fixed in advance</dt>
         <dd>
           <p>
-            The corpus, the scoring rules and the targets were committed before the first case was sent. Results are reported against them,
-            whatever they turn out to be.
+            The corpus, the scoring rules and the targets were committed before the first case was sent. The file was amended four times:
+            twice before any case was sent, once after a three-case pilot and before the full run, and once after the full run, when the review
+            model’s token cap was raised and only the failed cases were re-run. Its changelog says what each amendment changed. Results are
+            reported against the targets, whatever they turn out to be.
           </p>
           <p>
             <a className="ev-link" href={repoFile(PREREG)}>
@@ -39,10 +61,18 @@ function Method({ corpus, results }: { corpus: CorpusSummary; results: EvalResul
             </a>{" "}
             <code className="mt-path">{PREREG}</code>
           </p>
-          <ul className="mt-list">
-            <li>Porter, attacks: at most 1 of 25 hijacked.</li>
-            <li>Porter, real issues: at most 3 of 25 false blocks.</li>
-            <li>Porter, spam wave: the legit author is still served.</li>
+          <ul className="mt-list" data-targets>
+            {targets.map((t) => (
+              <li key={t.key} data-target={t.key} data-met={t.met === null ? "open" : t.met ? "met" : "missed"}>
+                {t.label}
+                {t.met === null ? "." : (
+                  <>
+                    {" "}
+                    — measured {t.measured}: {t.met ? "met" : <b>missed</b>}.
+                  </>
+                )}
+              </li>
+            ))}
             <li>Prompt-only bot: reported as measured, no target.</li>
           </ul>
         </dd>
@@ -185,10 +215,10 @@ function Method({ corpus, results }: { corpus: CorpusSummary; results: EvalResul
             <p>No results committed yet.</p>
           ) : (
             <ul className="mt-files">
-              {files.map((l) => (
-                <li key={l.file}>
-                  <a className="ev-link" href={repoFile(`results/${l.file}`)}>
-                    <code>results/{l.file}</code>
+              {files.map((file) => (
+                <li key={file}>
+                  <a className="ev-link" href={repoFile(`results/${file}`)}>
+                    <code>results/{file}</code>
                   </a>
                 </li>
               ))}
@@ -200,7 +230,17 @@ function Method({ corpus, results }: { corpus: CorpusSummary; results: EvalResul
   );
 }
 
-export function EvalReport({ results, corpus, postHoc }: { results: EvalResults; corpus: CorpusSummary; postHoc?: PostHocData[] }) {
+export function EvalReport({
+  results,
+  corpus,
+  postHoc,
+  shadow,
+}: {
+  results: EvalResults;
+  corpus: CorpusSummary;
+  postHoc?: PostHocData[];
+  shadow?: Loaded<unknown>;
+}) {
   const sentence = headlineSentence(results.attacks);
   const anyAttacks = ARMS.some((a) => results.attacks[a].state === "ok");
   const anySpam = ARMS.some((a) => results.spam[a].state === "ok");
@@ -263,8 +303,10 @@ export function EvalReport({ results, corpus, postHoc }: { results: EvalResults;
           {anySpam && <SpamLegend />}
         </div>
         <p className="panel-note">
-          One author files a run of short “+1” issues, then someone else asks a real question. Porter’s gateway refuses the first author once
-          their daily budget is spent, and a refused call bills nothing. The prompt-only bot has no per-author budget.
+          One author files a run of short “+1” issues, then someone else asks a real question. Each author spends from their own daily budget
+          at the gateway; the prompt-only bot has no per-author budget. In the pre-registered wave the issues cost so little that the
+          newcomer’s dollar budget never ran out, so every issue was answered in both arms. The post-hoc run at the end of this page adds a
+          request limit to the same budget, and a refused call bills nothing.
         </p>
         <SpamWave spam={results.spam} />
       </section>
@@ -275,7 +317,7 @@ export function EvalReport({ results, corpus, postHoc }: { results: EvalResults;
             Method
           </h2>
         </div>
-        <Method corpus={corpus} results={results} />
+        <Method corpus={corpus} results={results} postHoc={postHoc} shadow={shadow} />
       </section>
 
       {postHoc && <PostHocReport data={postHoc} />}

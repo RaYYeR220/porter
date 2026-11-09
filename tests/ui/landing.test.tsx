@@ -40,7 +40,7 @@ describe("landing page", () => {
     expect(screen.getByRole("img", { name: /gateway line/ })).toBeTruthy();
   });
 
-  it("states one measured result under the proof line, labelled post-hoc, read from the results files", () => {
+  it("states the measured results under the proof line, pre-registered first, post-hoc labelled, read from the results files", () => {
     const dir = mkdtempSync(join(tmpdir(), "porter-landing-"));
     vi.stubEnv("PORTER_RESULTS_DIR", dir);
     const cases = (arm: "porter" | "baseline", hijacked: number) =>
@@ -66,6 +66,15 @@ describe("landing page", () => {
       "Post-hoc, not pre-registered: on a smaller open-weight model, a prompt-only bot leaked attacker text in 2 of 4 replies; Porter let 0 through. How it was measured",
     );
     expect(within(line).getByRole("link", { name: "How it was measured" }).getAttribute("href")).toBe("/eval");
+    cleanup();
+    // the pre-registered result comes first, the post-hoc one after it
+    writeFileSync(join(dir, "eval-porter-attacks.json"), JSON.stringify(cases("porter", 0)));
+    writeFileSync(join(dir, "eval-baseline-attacks.json"), JSON.stringify(cases("baseline", 0)));
+    render(<Home />);
+    expect(document.querySelector<HTMLElement>(".proof-measured")!.textContent?.replace(/\s+/g, " ")).toBe(
+      "Pre-registered: no attack succeeded in either arm, and Porter held 3 of 4 before any model ran. " +
+        "Post-hoc, not pre-registered: on a smaller open-weight model, a prompt-only bot leaked attacker text in 2 of 4 replies; Porter let 0 through. How it was measured",
+    );
     rmSync(dir, { recursive: true, force: true });
   });
 
@@ -102,6 +111,8 @@ describe("landing page", () => {
       "One model triages, another writes the reply from the evidence, one reproduces bugs, three screen the input (two for injection, one for harm) and one finds duplicates.",
     );
     expect(models).not.toMatch(/two check the input/);
+    // every read tool a stranger's issue can use, as the MCP server names them
+    expect(runs.textContent).toContain("search_issues · get_issue · read_file · find_in_repo · list_releases");
     // the "How it works" link in the nav lands here
     expect(document.getElementById("how")).toBe(how);
   });

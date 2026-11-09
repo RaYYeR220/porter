@@ -26,7 +26,11 @@ type Base = {
   whenMissing: string;
 };
 export type PostHocEvalDef = Base & { kind: "eval"; set: EvalSet };
-export type PostHocSpamDef = Base & { kind: "spam" };
+export type PostHocSpamDef = Base & {
+  kind: "spam";
+  /** Why the legit question of the tagged wave was not answered, when it was not: read off its run page. */
+  legitNote?: string;
+};
 export type PostHocDef = PostHocEvalDef | PostHocSpamDef;
 
 /** The smaller model of the stress run, called directly for triage and review. */
@@ -58,6 +62,8 @@ export const POST_HOC: readonly PostHocDef[] = [
       "the newcomer end-user budget also carries a limit of 12 requests a day (`request_limit` on the Otari end-user budget), and the wave files as fresh authors",
     commit: "c0bc516",
     whenMissing: "Not run yet.",
+    legitNote:
+      "porter-guard held it at the review step, on a hidden-comment signal from other issues' template comments quoted in the evidence ([run 91c3ff00](https://porter-frontdesk.vercel.app/console/runs/91c3ff00-3597-4488-8b03-66ce2cce0809)); the reviewer has received that text without closed HTML comments since `5a999a7`",
   },
   {
     kind: "eval",
@@ -180,7 +186,13 @@ export function postHocTable(d: PostHocData): PostHocTable {
           ? [r.label, ...spamCells(r.loaded.data)]
           : [r.label, stateText(r.loaded, r, def.whenMissing), ...SPAM_COLUMNS.slice(1).map(() => "-")],
       ),
-      notes: runs.flatMap((r) => (r.loaded.state === "ok" && r.loaded.data.modeled ? [`${r.label}: ${r.loaded.data.modeled.formula}`] : [])),
+      notes: [
+        ...runs.flatMap((r) => (r.loaded.state === "ok" && r.loaded.data.modeled ? [`${r.label}: ${r.loaded.data.modeled.formula}`] : [])),
+        ...runs.flatMap((r) => {
+          const legit = r.loaded.state === "ok" ? r.loaded.data.legit : null;
+          return r.tag && legit && !legit.served && def.legitNote ? [`Legit question (${r.label}) not answered (${legit.status}): ${def.legitNote}.`] : [];
+        }),
+      ],
       sources: runs.map((r) => `results/${spamFileName(r.arm, r.tag)}`),
     };
   }
@@ -241,6 +253,18 @@ function botOutcome(s: StressFigures, short: boolean): string {
 /** The README's line. */
 export const stressSentence = (s: StressFigures) =>
   `with a smaller open-weight model (\`${SMALL_MODEL}\`) on triage and review, a prompt-only bot ${botOutcome(s, false)}; Porter let ${s.porter} through, and ${s.porterAtGateway} never reached a model.`;
+
+/** The pre-registered attack result, short, for the front page; null unless both arms' files are complete. */
+export function preregShort(porter: Loaded<EvalFile>, baseline: Loaded<EvalFile>): string | null {
+  if (porter.state !== "ok" || baseline.state !== "ok") return null;
+  const p = porter.data;
+  const b = baseline.data;
+  if (p.stopped || b.stopped || p.totals.cases === 0 || p.totals.cases !== b.totals.cases) return null;
+  const held = `Porter held ${p.totals.blocked_at.gateway_guardrail ?? 0} of ${p.totals.cases} before any model ran.`;
+  return p.totals.hijacked === 0 && b.totals.hijacked === 0
+    ? `no attack succeeded in either arm, and ${held}`
+    : `${p.totals.hijacked} of ${p.totals.cases} attacks succeeded against Porter and ${b.totals.hijacked} against a prompt-only bot; ${held}`;
+}
 
 /** The landing page's shorter line. */
 export const stressShort = (s: StressFigures) => `on a smaller open-weight model, a prompt-only bot ${botOutcome(s, true)}; Porter let ${s.porter} through.`;

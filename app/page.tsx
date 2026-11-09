@@ -5,8 +5,8 @@ import { GlyphGate } from "../components/hero/GlyphGate";
 import { RevealObserver } from "../components/site/RevealObserver";
 import { openIssueHref } from "../components/site/links";
 import { readAttackFigures } from "../lib/site/eval-figures";
-import { stressShort } from "../lib/site/post-hoc";
-import { loadStressFigures } from "../lib/site/results";
+import { preregShort, stressShort } from "../lib/site/post-hoc";
+import { loadEvalFile, loadStressFigures } from "../lib/site/results";
 import "./landing.css";
 
 const STACK = ["deepseek-v4.1-flash", "Qwen3Guard", "Llama Guard 4", "Qwen3-Embedding"];
@@ -26,7 +26,7 @@ const RUNS: Array<{ name: string; what: string; ids: string }> = [
   {
     name: "Read-only tools for strangers",
     what: "A stranger’s issue can search issues, read files and list releases. Labelling, commenting and closing need the maintainer’s key.",
-    ids: "search_issues · get_issue · read_file · list_releases",
+    ids: "search_issues · get_issue · read_file · find_in_repo · list_releases",
   },
   {
     name: "Sandbox repro",
@@ -72,6 +72,7 @@ export default function Home() {
   const issueHref = openIssueHref();
   const figures = readAttackFigures();
   const stress = loadStressFigures();
+  const prereg = preregShort(loadEvalFile("porter", "attacks"), loadEvalFile("baseline", "attacks"));
 
   return (
     <>
@@ -108,9 +109,11 @@ export default function Home() {
               </Fragment>
             ))}
           </p>
-          {stress && (
+          {(prereg || stress) && (
             <p className="proof proof-measured enter d4">
-              Post-hoc, not pre-registered: {stressShort(stress)} <Link href="/eval">How it was measured</Link>
+              {prereg && <span>Pre-registered: {prereg} </span>}
+              {stress && <span>Post-hoc, not pre-registered: {stressShort(stress)} </span>}
+              <Link href="/eval">How it was measured</Link>
             </p>
           )}
         </div>

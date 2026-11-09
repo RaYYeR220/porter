@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { EvalReport } from "../../components/evidence/EvalReport";
-import { corpusSummary, loadEvalResults, loadPostHoc } from "../../lib/site/results";
+import { corpusSummary, loadEvalResults, loadPostHoc, loadShadowReport } from "../../lib/site/results";
 import "../app.css";
 import "../evidence.css";
 
@@ -12,5 +12,5 @@ export const metadata: Metadata = {
 
 /** Read from results/ when the page is built; a missing file renders as "Not run yet". Post-hoc runs come last. */
 export default function EvalPage() {
-  return <EvalReport results={loadEvalResults()} corpus={corpusSummary()} postHoc={loadPostHoc()} />;
+  return <EvalReport results={loadEvalResults()} corpus={corpusSummary()} postHoc={loadPostHoc()} shadow={loadShadowReport()} />;
 }

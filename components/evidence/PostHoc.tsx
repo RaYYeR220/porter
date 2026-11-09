@@ -2,11 +2,22 @@ import { Fragment } from "react";
 import { POST_HOC_NOTE, POST_HOC_TITLE, postHocTable, sentence } from "../../lib/site/post-hoc";
 import type { PostHocData } from "../../lib/site/post-hoc";
 
-/** Text with `code` spans, as the shared table cells write them. */
+/** Text with `code` spans and [links](https://…), as the shared table cells and notes write them. Only https links become anchors. */
 function Inline({ text }: { text: string }) {
   return (
     <>
-      {text.split("`").map((part, i) => (i % 2 === 1 ? <code key={i}>{part}</code> : <Fragment key={i}>{part}</Fragment>))}
+      {text.split(/(`[^`]*`|\[[^\]]+\]\(https:\/\/[^)\s]+\))/).map((part, i) => {
+        if (part.startsWith("`") && part.endsWith("`") && part.length > 1) return <code key={i}>{part.slice(1, -1)}</code>;
+        const link = /^\[([^\]]+)\]\((https:\/\/[^)\s]+)\)$/.exec(part);
+        if (link) {
+          return (
+            <a key={i} className="ev-link" href={link[2]}>
+              {link[1]}
+            </a>
+          );
+        }
+        return <Fragment key={i}>{part}</Fragment>;
+      })}
     </>
   );
 }

@@ -25,6 +25,7 @@ import {
 } from "../lib/site/post-hoc";
 import type { PostHocData } from "../lib/site/post-hoc";
 import { loadPostHoc, loadShadowReport } from "../lib/site/results";
+import { checkTargets, targetsSentence } from "../lib/site/targets";
 import type { ShadowReport } from "../lib/site/results";
 
 export const START = "<!-- results:start -->";
@@ -119,6 +120,19 @@ function spamSection(files: Results["spam"]): string {
   ].join("\n");
 }
 
+/** The pre-registered targets against the Porter arm's files; the README says so when one is missed. */
+function targetsSection(r: Results): string {
+  const checks = checkTargets(r.attacks.porter, r.benign.porter, r.spam.porter);
+  const rows = checks.map((c) => [c.label, c.measured ?? "-", c.met === null ? "not run yet" : c.met ? "met" : "**missed**"]);
+  return [
+    "#### Pre-registered targets",
+    "",
+    table(["Target", "Measured", "Result"], rows),
+    "",
+    "The prompt-only bot has no target; it is reported as measured.",
+  ].join("\n");
+}
+
 /** The post-hoc block: one small table per experiment, then what changed and the commit. */
 function postHocSection(all: PostHocData[]): string {
   const parts = [`### ${POST_HOC_TITLE}`, "", POST_HOC_NOTE];
@@ -141,6 +155,8 @@ export function renderBlock(r: Results): string {
     benignSection(r.benign),
     "",
     spamSection(r.spam),
+    "",
+    targetsSection(r),
     ...(r.postHoc ? ["", postHocSection(r.postHoc)] : []),
   ].join("\n");
 }
@@ -149,20 +165,14 @@ const ofN = (x: number, n: number) => `${x} of ${n}`;
 const POST_HOC_LEAD = "- **Post-hoc, not pre-registered:**";
 
 /**
- * Up to four lines for the top of the README, strongest honest result first: the smaller-model stress run
- * (post-hoc), the pre-registered attacks and false blocks, the request-capped spam wave (post-hoc), the read-only
- * run over Otari's tracker. Each line appears only when its files are complete; every number comes from them.
+ * The list at the top of the README, the pre-registered result first: its attacks and false blocks, then its
+ * targets, met or missed; after them, labelled, the post-hoc smaller-model run and the request-capped spam wave;
+ * last, the read-only run over Otari's tracker. Each line appears only when its files are complete; every number
+ * comes from them.
  */
 export function renderMeasured(r: Results): string {
   const lines: string[] = [];
   const posthoc = (key: string) => r.postHoc?.find((d) => d.def.key === key);
-
-  const small = posthoc("small-model");
-  if (small?.def.kind === "eval") {
-    const [porter, baseline] = small.runs as Array<{ loaded: Loaded<EvalFile> }>;
-    const s = porter && baseline ? stressFigures(porter.loaded, baseline.loaded) : null;
-    if (s) lines.push(`${POST_HOC_LEAD} ${stressSentence(s)} [Details](#after-the-pre-registered-run-post-hoc-not-pre-registered)`);
-  }
 
   const { porter: pa, baseline: ba } = r.attacks;
   const { porter: pb, baseline: bb } = r.benign;
@@ -177,7 +187,16 @@ export function renderMeasured(r: Results): string {
         `Porter held ${ofN(pa.totals.blocked_at.gateway_guardrail ?? 0, pa.totals.cases)} at the gateway before any model ran and spent ${usd(pa.totals.cost_usd)} on the attacks, against ${usd(ba.totals.cost_usd)}. ` +
         `The price: ${ofN(pb.totals.falseBlocks, pb.totals.cases)} legitimate issues held for a maintainer, against ${ofN(bb.totals.falseBlocks, bb.totals.cases)}. [Results](#results)`,
     );
+    lines.push(`- **Pre-registered targets:** ${targetsSentence(checkTargets(pa, pb, r.spam.porter))} [Targets](#pre-registered-targets)`);
   }
+
+  const small = posthoc("small-model");
+  if (small?.def.kind === "eval") {
+    const [porter, baseline] = small.runs as Array<{ loaded: Loaded<EvalFile> }>;
+    const s = porter && baseline ? stressFigures(porter.loaded, baseline.loaded) : null;
+    if (s) lines.push(`${POST_HOC_LEAD} ${stressSentence(s)} [Details](#after-the-pre-registered-run-post-hoc-not-pre-registered)`);
+  }
+
 
   const cap = posthoc("request-cap");
   if (cap?.def.kind === "spam") {
@@ -187,7 +206,8 @@ export function renderMeasured(r: Results): string {
       const n = spamCounts(s);
       lines.push(
         `${POST_HOC_LEAD} with a request cap in each newcomer's daily budget, ${ofN(n.answered, s.n)} spam issues were answered and ${n.refused} were refused at the gateway${n.refusedFree ? " at no cost" : ""}; ` +
-          `with the dollar cap alone, ${ofN(spamCounts(pre.loaded.data).answered, pre.loaded.data.n)} were answered.`,
+          `with the dollar cap alone, ${ofN(spamCounts(pre.loaded.data).answered, pre.loaded.data.n)} were answered.` +
+          (s.legit && !s.legit.served && cap.def.legitNote ? ` The legit question in that run was not answered (${s.legit.status}): ${cap.def.legitNote}.` : ""),
       );
     }
   }

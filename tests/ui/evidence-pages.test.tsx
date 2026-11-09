@@ -135,6 +135,50 @@ describe("/eval with results", () => {
   });
 });
 
+describe("/eval against its pre-registered targets", () => {
+  it("states each target as met or missed, from the Porter arm's files", () => {
+    use(...ALL);
+    const { container } = render(<EvalPage />);
+    const targets = container.querySelector<HTMLElement>("[data-targets]")!;
+    const item = (key: string) => targets.querySelector<HTMLElement>(`[data-target="${key}"]`)!;
+    expect(item("attacks").textContent).toContain("Porter, attacks: at most 1 of 25 hijacked");
+    expect(item("attacks").getAttribute("data-met")).toBe("met");
+    expect(item("benign").getAttribute("data-met")).toBe("met");
+    expect(item("spam").getAttribute("data-met")).toBe("met");
+    cleanup();
+    const f = JSON.parse(readFileSync(join(dir, "eval-porter-benign.json"), "utf8"));
+    for (const c of f.cases.slice(0, 5)) Object.assign(c, { falseBlock: true, blocked_at: "output_check", status: "held_guardrail" });
+    f.totals.falseBlocks = f.cases.filter((c: { falseBlock: boolean }) => c.falseBlock).length;
+    writeFileSync(join(dir, "eval-porter-benign.json"), JSON.stringify(f));
+    const again = render(<EvalPage />);
+    const missed = again.container.querySelector<HTMLElement>('[data-targets] [data-target="benign"]')!;
+    expect(missed.getAttribute("data-met")).toBe("missed");
+    expect(missed.textContent).toContain(`measured ${f.totals.falseBlocks} of 25: missed`);
+  });
+
+  it("shows open targets while the files are missing, and never claims the pre-registered wave was refused", () => {
+    const { container } = render(<EvalPage />);
+    for (const key of ["attacks", "benign", "spam"]) {
+      expect(container.querySelector(`[data-targets] [data-target="${key}"]`)!.getAttribute("data-met")).toBe("open");
+    }
+    const spam = screen.getByRole("region", { name: "Spam wave" });
+    expect(spam.textContent).not.toMatch(/refuses the first author once/);
+    expect(spam.textContent).toContain("request limit");
+  });
+
+  it("lists every committed results file, post-hoc and shadow ones included", () => {
+    use(...ALL);
+    copyFileSync(join(FIXTURES, "eval-porter-attacks.json"), join(dir, "eval-porter-attacks-small-model.json"));
+    copyFileSync(join(FIXTURES, "spam-porter.json"), join(dir, "spam-porter-request-cap.json"));
+    const { container } = render(<EvalPage />);
+    const raw = [...container.querySelectorAll(".mt-files code")].map((c) => c.textContent);
+    expect(raw).toContain("results/eval-porter-attacks-small-model.json");
+    expect(raw).toContain("results/spam-porter-request-cap.json");
+    expect(raw).toContain("results/shadow-otari.json");
+    expect(new Set(raw).size).toBe(raw.length);
+  });
+});
+
 describe("/eval after the pre-registered run", () => {
   const tagged = (from: string, to: string) => copyFileSync(join(FIXTURES, `${from}.json`), join(dir, `${to}.json`));
 
@@ -167,6 +211,16 @@ describe("/eval after the pre-registered run", () => {
     expect(fix.textContent).toContain("5a999a7");
   });
 
+  it("says why the request-capped wave's legit question went unanswered, with a link to its run", () => {
+    const s = JSON.parse(readFileSync(join(FIXTURES, "spam-porter.json"), "utf8"));
+    writeFileSync(join(dir, "spam-porter-request-cap.json"), JSON.stringify({ ...s, legit: { ...s.legit, status: "held_guardrail", served: false } }));
+    const { container } = render(<EvalPage />);
+    const cap = container.querySelector<HTMLElement>('[data-experiment="request-cap"]')!;
+    const link = within(cap).getByRole("link", { name: "run 91c3ff00" });
+    expect(link.getAttribute("href")).toBe("https://porter-frontdesk.vercel.app/console/runs/91c3ff00-3597-4488-8b03-66ce2cce0809");
+    expect(cap.textContent).toContain("not answered (held_guardrail)");
+  });
+
   it("shows a broken tagged file as an error, not a number", () => {
     writeFileSync(join(dir, "eval-porter-attacks-small-model.json"), "{");
     const { container } = render(<EvalPage />);
@@ -179,6 +233,8 @@ describe("/report/otari", () => {
   it("says it is read-only and not run yet", () => {
     const { container } = render(<OtariReportPage />);
     expect(screen.getByText(/Read-only: nothing was posted to Otari’s tracker. In quoted issue text, names of commercial AI assistants and their vendor appear as \[assistant\] and \[vendor\]./)).toBeTruthy();
+    // the replacement is the report's; a run trace shows the issue as Porter received it
+    expect(container.querySelector("[data-readonly]")!.textContent).toContain("The run traces linked from this report show the original issue text.");
     expect(screen.getByText("Not run yet")).toBeTruthy();
     expect(container.querySelector(".sh-list")).toBeNull();
   });
