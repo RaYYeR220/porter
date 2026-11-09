@@ -2,13 +2,17 @@
  * Renders the eval results into README.md, between <!-- results:start --> and <!-- results:end -->.
  *   pnpm eval:render
  *
- * Reads results/eval-<arm>-<set>.json and results/spam-<arm>.json. Only the text between the markers
- * changes; a missing results file renders "Not run yet." and no number is ever filled in by hand.
+ * Reads results/eval-<arm>-<set>.json and results/spam-<arm>.json for the pre-registered tables, then the
+ * post-hoc runs' tagged files (lib/site/post-hoc.ts) for a separate block below them. Only the text between the
+ * markers changes; a missing results file renders "Not run yet." and no number is ever filled in by hand.
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { EvalFile } from "../eval/harness";
 import type { SpamResult } from "../eval/spam-core";
+import { attackCells, benignCells, POST_HOC_NOTE, POST_HOC_TITLE, postHocTable, sentence, usd } from "../lib/site/post-hoc";
+import type { PostHocData } from "../lib/site/post-hoc";
+import { loadPostHoc } from "../lib/site/results";
 
 export const START = "<!-- results:start -->";
 export const END = "<!-- results:end -->";
@@ -20,6 +24,8 @@ export type Results = {
   attacks: Partial<Record<(typeof ARMS)[number], EvalFile>>;
   benign: Partial<Record<(typeof ARMS)[number], EvalFile>>;
   spam: Partial<Record<(typeof ARMS)[number], SpamResult>>;
+  /** The post-hoc experiments, read and checked by the page loaders. */
+  postHoc?: PostHocData[];
 };
 
 function readJson<T>(path: string): T | undefined {
@@ -27,7 +33,7 @@ function readJson<T>(path: string): T | undefined {
 }
 
 export function loadResults(dir: string): Results {
-  const r: Results = { attacks: {}, benign: {}, spam: {} };
+  const r: Results = { attacks: {}, benign: {}, spam: {}, postHoc: loadPostHoc(dir) };
   for (const arm of ARMS) {
     r.attacks[arm] = readJson<EvalFile>(join(dir, `eval-${arm}-attacks.json`));
     r.benign[arm] = readJson<EvalFile>(join(dir, `eval-${arm}-benign.json`));
@@ -36,33 +42,18 @@ export function loadResults(dir: string): Results {
   return r;
 }
 
-const usd = (n: number) => `$${n.toFixed(4)}`;
 const row = (cells: string[]) => `| ${cells.join(" | ")} |`;
 const table = (head: string[], rows: string[][]) => [row(head), row(head.map(() => "---")), ...rows.map(row)].join("\n");
-const inconclusiveNote = (f: EvalFile) => (f.totals.inconclusive > 0 ? ` (${f.totals.inconclusive} inconclusive)` : "");
-const stoppedNote = (f: EvalFile) => (f.stopped ? ` (stopped: ${f.stopped.reason})` : "");
+const code = (s: string) => "`" + s + "`";
 
 function attackSection(files: Results["attacks"]): string {
   const head = ["Arm", "Hijacked", "Gateway guardrail", "Output check", "ACL", "Server refused", "Model refused", "Not blocked", "Inconclusive", "Cost"];
   const rows = ARMS.map((arm) => {
     const f = files[arm];
     if (!f) return [label(arm), NOT_RUN, ...Array(8).fill("-")];
-    const b = f.totals.blocked_at;
-    // Hijacked cases that were contained (refused write) count under their block; "Not blocked" is the rest of the hijacks.
-    return [
-      label(arm),
-      `${f.totals.hijacked}/${f.totals.cases}${inconclusiveNote(f)}${stoppedNote(f)}`,
-      String(b.gateway_guardrail ?? 0),
-      String(b.output_check ?? 0),
-      String(b.acl ?? 0),
-      String(b.server_refused ?? 0),
-      String(b.model_refused ?? 0),
-      String(f.cases.filter((c) => c.hijacked && c.blocked_at === null).length),
-      String(f.totals.inconclusive),
-      usd(f.totals.cost_usd),
-    ];
+    return [label(arm), ...attackCells(f)];
   });
-  const src = ARMS.map((a) => `\`results/eval-${a}-attacks.json\``).join(", ");
+  const src = ARMS.map((a) => code(`results/eval-${a}-attacks.json`)).join(", ");
   return [
     "#### Attacks (hijacked = the attacker's goal was met or a write was attempted)",
     "",
@@ -77,16 +68,9 @@ function benignSection(files: Results["benign"]): string {
   const rows = ARMS.map((arm) => {
     const f = files[arm];
     if (!f) return [label(arm), NOT_RUN, "-", "-", "-", "-"];
-    return [
-      label(arm),
-      `${f.totals.falseBlocks}/${f.totals.cases}${inconclusiveNote(f)}${stoppedNote(f)}`,
-      String(f.cases.filter((c) => c.falseBlock && c.blocked_at === "gateway_guardrail").length),
-      String(f.cases.filter((c) => c.falseBlock && c.blocked_at === "output_check").length),
-      String(f.totals.inconclusive),
-      usd(f.totals.cost_usd),
-    ];
+    return [label(arm), ...benignCells(f)];
   });
-  const src = ARMS.map((a) => `\`results/eval-${a}-benign.json\``).join(", ");
+  const src = ARMS.map((a) => code(`results/eval-${a}-benign.json`)).join(", ");
   return ["#### Benign issues (false block = the issue was held)", "", table(head, rows), "", `Source: ${src}.`].join("\n");
 }
 
@@ -105,7 +89,7 @@ function spamSection(files: Results["spam"]): string {
       s.modeled ? `${usd(s.modeled.cost_usd)} (modeled)` : "-",
     ];
   });
-  const src = ARMS.map((a) => `\`results/spam-${a}.json\``).join(", ");
+  const src = ARMS.map((a) => code(`results/spam-${a}.json`)).join(", ");
   const formulas = ARMS.flatMap((a) => (files[a]?.modeled ? [`- ${label(a)}: ${files[a]!.modeled!.formula}`] : []));
   return [
     "#### Spam wave",
@@ -117,6 +101,19 @@ function spamSection(files: Results["spam"]): string {
   ].join("\n");
 }
 
+/** The post-hoc block: one small table per experiment, then what changed and the commit. */
+function postHocSection(all: PostHocData[]): string {
+  const parts = [`### ${POST_HOC_TITLE}`, "", POST_HOC_NOTE];
+  for (const d of all) {
+    const t = postHocTable(d);
+    parts.push("", `#### ${t.title}`, "", table(t.head, t.rows));
+    if (t.notes.length > 0) parts.push("", ...t.notes.map((n) => `- ${n}`));
+    const src = t.sources.map(code).join(", ");
+    parts.push("", `What changed: ${sentence(t.changed)} (commit ${t.commit}). Source: ${src}.`);
+  }
+  return parts.join("\n");
+}
+
 export function renderBlock(r: Results): string {
   return [
     "Targets were fixed before the first run: see [`eval/PREREGISTRATION.md`](eval/PREREGISTRATION.md).",
@@ -126,6 +123,7 @@ export function renderBlock(r: Results): string {
     benignSection(r.benign),
     "",
     spamSection(r.spam),
+    ...(r.postHoc ? ["", postHocSection(r.postHoc)] : []),
   ].join("\n");
 }
 

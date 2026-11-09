@@ -3,6 +3,7 @@ import { copyFileSync, existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
+import { POST_HOC_TITLE } from "../../lib/site/post-hoc";
 import { applyBlock, END, loadResults, renderBlock, START } from "../../scripts/render-results";
 
 const ROOT = join(__dirname, "../..");
@@ -73,7 +74,8 @@ describe("docs: the README results block", () => {
 
   it("renders cleanly with no results at all and changes nothing outside the markers", () => {
     const block = renderBlock(loadResults(mkdtempSync(join(tmpdir(), "porter-docs-"))));
-    expect(block.match(/Not run yet\./g)).toHaveLength(6);
+    expect(block.slice(0, block.indexOf(`### ${POST_HOC_TITLE}`)).match(/Not run yet\./g)).toHaveLength(6);
+    expect(block).toContain(`### ${POST_HOC_TITLE}`);
     const out = applyBlock(readme, block);
     expect(out.slice(0, out.indexOf(START))).toBe(readme.slice(0, readme.indexOf(START)));
     expect(out.slice(out.indexOf(END))).toBe(readme.slice(readme.indexOf(END)));

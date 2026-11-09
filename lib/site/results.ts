@@ -9,6 +9,8 @@ import { summarizeShadow } from "../shadow-summary";
 import type { ShadowFile, ShadowSummary } from "../shadow-summary";
 import { ARMS, countRows } from "./evidence";
 import type { EvalResults, Loaded, PerArm } from "./evidence";
+import { evalFileName, POST_HOC, spamFileName } from "./post-hoc";
+import type { PostHocData } from "./post-hoc";
 
 /**
  * Server-only loaders for the evidence pages. They read the committed files in results/ when the page is
@@ -146,7 +148,12 @@ function load<T>(path: string, name: string, schema: z.ZodType<T>, check: (v: T)
 }
 
 export function loadEvalFile(arm: Arm, set: EvalSet, dir = resultsDir()): Loaded<EvalFile> {
-  const name = `eval-${arm}-${set}.json`;
+  return loadTaggedEvalFile(arm, set, null, dir);
+}
+
+/** A post-hoc run's file, eval-<arm>-<set>-<tag>.json: the same shape and the same checks as the pre-registered one. */
+export function loadTaggedEvalFile(arm: Arm, set: EvalSet, tag: string | null, dir = resultsDir()): Loaded<EvalFile> {
+  const name = evalFileName(arm, set, tag);
   return load<EvalFile>(join(dir, name), name, EvalFileSchema, (f) => {
     if (f.arm !== arm || f.set !== set) return `holds arm "${f.arm}", set "${f.set}"`;
     if (f.cases.some((c) => c.arm !== arm || c.set !== set)) return "a case belongs to another arm or set";
@@ -160,7 +167,12 @@ export function loadEvalFile(arm: Arm, set: EvalSet, dir = resultsDir()): Loaded
 }
 
 export function loadSpamFile(arm: Arm, dir = resultsDir()): Loaded<SpamResult> {
-  const name = `spam-${arm}.json`;
+  return loadTaggedSpamFile(arm, null, dir);
+}
+
+/** A post-hoc spam wave, spam-<arm>-<tag>.json, checked like the pre-registered one. */
+export function loadTaggedSpamFile(arm: Arm, tag: string | null, dir = resultsDir()): Loaded<SpamResult> {
+  const name = spamFileName(arm, tag);
   return load<SpamResult>(join(dir, name), name, SpamSchema as z.ZodType<SpamResult>, (s) => {
     if (s.arm !== arm) return `holds arm "${s.arm}"`;
     if (s.issues.length > s.n) return "more issues than the wave filed";
@@ -175,6 +187,17 @@ export function loadEvalResults(dir = resultsDir()): EvalResults {
     benign: per((a) => loadEvalFile(a, "benign", dir)),
     spam: per((a) => loadSpamFile(a, dir)),
   };
+}
+
+/** Every post-hoc experiment with its runs' files; a file with fewer cases than the corpus counts as still running. */
+export function loadPostHoc(dir = resultsDir()): PostHocData[] {
+  const expected = { attacks: loadAttacks().length, benign: loadBenign().length };
+  return POST_HOC.map(
+    (def): PostHocData =>
+      def.kind === "eval"
+        ? { def, expected: expected[def.set], runs: def.runs.map((r) => ({ ...r, loaded: loadTaggedEvalFile(r.arm, def.set, r.tag, dir) })) }
+        : { def, runs: def.runs.map((r) => ({ ...r, loaded: loadTaggedSpamFile(r.arm, r.tag, dir) })) },
+  );
 }
 
 export type ShadowReport = { file: ShadowFile; summary: ShadowSummary };

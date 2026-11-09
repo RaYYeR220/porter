@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { applyBlock, END, loadResults, renderBlock, START } from "../../scripts/render-results";
+import { POST_HOC_TITLE } from "../../lib/site/post-hoc";
 import { buildEvalFile } from "../../eval/harness";
 import type { EvalRow } from "../../eval/harness";
 
@@ -38,7 +39,8 @@ describe("renderBlock", () => {
   it("says Not run yet. when no results exist, and invents nothing", () => {
     const dir = mkdtempSync(join(tmpdir(), "porter-res-"));
     const block = renderBlock(loadResults(dir));
-    expect(block.match(/Not run yet\./g)).toHaveLength(6);
+    // six cells in the pre-registered tables; the post-hoc block below has its own
+    expect(block.slice(0, block.indexOf(`### ${POST_HOC_TITLE}`)).match(/Not run yet\./g)).toHaveLength(6);
     expect(block).not.toMatch(/\d+\/\d+/);
     expect(block).toContain("`results/eval-porter-attacks.json`");
     expect(block).toContain("`results/spam-baseline.json`");

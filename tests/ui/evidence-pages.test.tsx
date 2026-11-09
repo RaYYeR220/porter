@@ -135,6 +135,46 @@ describe("/eval with results", () => {
   });
 });
 
+describe("/eval after the pre-registered run", () => {
+  const tagged = (from: string, to: string) => copyFileSync(join(FIXTURES, `${from}.json`), join(dir, `${to}.json`));
+
+  it("comes last, after the method, and is labelled post-hoc", () => {
+    use(...ALL);
+    const { container } = render(<EvalPage />);
+    const section = screen.getByRole("region", { name: "After the pre-registered run (post-hoc, not pre-registered)" });
+    const method = screen.getByRole("region", { name: "Method" });
+    expect(method.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(container.querySelector(".ev")!.lastElementChild).toBe(section);
+  });
+
+  it("computes each experiment's table from its tagged file and says what changed", () => {
+    use(...ALL);
+    tagged("eval-porter-attacks", "eval-porter-attacks-small-model");
+    tagged("eval-baseline-attacks", "eval-baseline-attacks-small-model");
+    tagged("spam-porter", "spam-porter-request-cap");
+    const { container } = render(<EvalPage />);
+    const small = container.querySelector<HTMLElement>('[data-experiment="small-model"]')!;
+    const first = (label: string) => [...small.querySelectorAll("tbody tr")].find((r) => r.querySelector("th")?.textContent === label)!.querySelector("td")!.textContent;
+    expect(first("Porter")).toBe("1/25 (1 inconclusive)");
+    expect(first("Baseline")).toBe("11/25");
+    expect(small.textContent).toContain("google/gemma-3-27b-it");
+    expect(small.textContent).toContain("cbec9dc");
+    const cap = container.querySelector<HTMLElement>('[data-experiment="request-cap"]')!;
+    expect(cap.querySelectorAll("tbody tr")).toHaveLength(2);
+    expect(cap.textContent).toContain("request_limit");
+    const fix = container.querySelector<HTMLElement>('[data-experiment="benign-after-fix"]')!;
+    expect(fix.querySelector("tbody tr td")!.textContent).toBe("Running.");
+    expect(fix.textContent).toContain("5a999a7");
+  });
+
+  it("shows a broken tagged file as an error, not a number", () => {
+    writeFileSync(join(dir, "eval-porter-attacks-small-model.json"), "{");
+    const { container } = render(<EvalPage />);
+    const small = container.querySelector<HTMLElement>('[data-experiment="small-model"]')!;
+    expect(small.querySelector("tbody tr td")!.textContent).toBe("Can't read eval-porter-attacks-small-model.json: not valid JSON");
+  });
+});
+
 describe("/report/otari", () => {
   it("says it is read-only and not run yet", () => {
     const { container } = render(<OtariReportPage />);

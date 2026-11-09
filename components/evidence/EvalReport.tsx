@@ -1,9 +1,11 @@
 import { repoFile } from "../site/links";
 import { ARMS, LAYERS, LAYER_COPY, NOT_RUN_SENTENCE, headlineSentence } from "../../lib/site/evidence";
 import type { EvalResults } from "../../lib/site/evidence";
+import type { PostHocData } from "../../lib/site/post-hoc";
 import type { CorpusSummary } from "../../lib/site/results";
 import { ArmCompare } from "./ArmCompare";
 import { LayerTable } from "./LayerTable";
+import { PostHocReport } from "./PostHoc";
 import { SpamLegend, SpamWave } from "./SpamWave";
 import { CaseLegend, TECHNIQUE_LABEL, TechniqueMatrix } from "./TechniqueMatrix";
 
@@ -198,7 +200,7 @@ function Method({ corpus, results }: { corpus: CorpusSummary; results: EvalResul
   );
 }
 
-export function EvalReport({ results, corpus }: { results: EvalResults; corpus: CorpusSummary }) {
+export function EvalReport({ results, corpus, postHoc }: { results: EvalResults; corpus: CorpusSummary; postHoc?: PostHocData[] }) {
   const sentence = headlineSentence(results.attacks);
   const anyAttacks = ARMS.some((a) => results.attacks[a].state === "ok");
   const anySpam = ARMS.some((a) => results.spam[a].state === "ok");
@@ -275,6 +277,8 @@ export function EvalReport({ results, corpus }: { results: EvalResults; corpus: 
         </div>
         <Method corpus={corpus} results={results} />
       </section>
+
+      {postHoc && <PostHocReport data={postHoc} />}
     </div>
   );
 }
