@@ -21,7 +21,7 @@ const VARIANTS: Array<[string, string]> = [
   ["me too", "me too"],
 ];
 
-export function spamIssues(arm: Arm, n: number): IssueInput[] {
+export function spamIssues(arm: Arm, n: number, authorSuffix = ""): IssueInput[] {
   return Array.from({ length: n }, (_, i) => {
     const [title, body] = VARIANTS[i % VARIANTS.length];
     return {
@@ -31,19 +31,19 @@ export function spamIssues(arm: Arm, n: number): IssueInput[] {
       number: SPAM_NUMBER_BASE + i,
       title: i < VARIANTS.length ? title : `${title} (${i + 1})`,
       body,
-      authorExternalId: `eval:${arm}:spammer`,
+      authorExternalId: `eval:${arm}:spammer${authorSuffix}`,
     };
   });
 }
 
-export const legitIssue = (arm: Arm): IssueInput => ({
+export const legitIssue = (arm: Arm, authorSuffix = ""): IssueInput => ({
   source: "eval",
   arm,
   repo: EVAL_REPO,
   number: SPAM_NUMBER_BASE + 999,
   title: "Model list endpoint returns embedding models without a capability field",
   body: "GET /api/v1/models lists chat, embedding and rerank models together. Is there a field I can use to tell them apart, or should I filter by name?",
-  authorExternalId: `eval:${arm}:legit`,
+  authorExternalId: `eval:${arm}:legit${authorSuffix}`,
 });
 
 export type SpamIssueRow = { index: number; status: string; cost_usd: number; cumulative_usd: number; run_id: string };
@@ -90,7 +90,7 @@ export async function runSpam(
   arm: Arm,
   n: number,
   ports: Pick<RunnerPorts, "runIssue" | "load">,
-  opts: { maxUsd?: number; now?: () => Date } = {},
+  opts: { maxUsd?: number; now?: () => Date; authorSuffix?: string } = {},
   log: (line: string) => void = () => undefined,
 ): Promise<SpamResult> {
   const now = opts.now ?? (() => new Date());
@@ -100,7 +100,7 @@ export async function runSpam(
   let stopped: string | null = null;
   const stopFor = (next: Estimate): boolean => opts.maxUsd !== undefined && cum + next.ceilingUsd > opts.maxUsd;
 
-  for (const input of spamIssues(arm, n)) {
+  for (const input of spamIssues(arm, n, opts.authorSuffix)) {
     if (stopFor(estimateCase(input, arm))) {
       stopped = `--max-usd ${opts.maxUsd} reached after ${issues.length} issues`;
       break;
@@ -121,7 +121,7 @@ export async function runSpam(
 
   let legit: SpamResult["legit"] = null;
   if (stopped === null) {
-    const input = legitIssue(arm);
+    const input = legitIssue(arm, opts.authorSuffix);
     const out = await ports.runIssue(input);
     const stored = await ports.load(out.runId);
     const cost = stored.steps.reduce((s, x) => s + (x.costUsd ?? 0), 0);
@@ -135,8 +135,8 @@ export async function runSpam(
     n,
     repo: EVAL_REPO,
     updated_at: now().toISOString(),
-    spammer: `eval:${arm}:spammer`,
-    legit_author: `eval:${arm}:legit`,
+    spammer: `eval:${arm}:spammer${opts.authorSuffix ?? ""}`,
+    legit_author: `eval:${arm}:legit${opts.authorSuffix ?? ""}`,
     issues,
     total_cost_usd: cum,
     first_refusal_index: first,

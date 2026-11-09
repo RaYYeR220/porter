@@ -25,6 +25,7 @@ export function parseSpamCli(argv: string[]) {
       n: { type: "string", default: "20" },
       "dry-run": { type: "boolean", default: false },
       "max-usd": { type: "string" },
+      tag: { type: "string" },
     },
   });
   if (values.arm !== "porter" && values.arm !== "baseline") throw new Error("--arm must be porter or baseline");
@@ -32,7 +33,9 @@ export function parseSpamCli(argv: string[]) {
   if (!Number.isInteger(n) || n < 1 || n > 50) throw new Error("--n must be an integer from 1 to 50");
   const maxUsd = values["max-usd"] === undefined ? undefined : Number(values["max-usd"]);
   if (maxUsd !== undefined && !(maxUsd > 0)) throw new Error("--max-usd must be a positive number");
-  return { arm: values.arm as Arm, n, dryRun: values["dry-run"] === true, maxUsd };
+  const tag = values.tag?.trim() || undefined;
+  if (tag && !/^[a-z0-9-]{1,32}$/.test(tag)) throw new Error("--tag must be lowercase letters, digits or dashes");
+  return { arm: values.arm as Arm, n, dryRun: values["dry-run"] === true, maxUsd, tag };
 }
 
 async function main() {
@@ -51,8 +54,10 @@ async function main() {
   }
   mkdirSync(RESULTS_DIR, { recursive: true });
   // Newcomer budget on purpose: no endUserBudget, so the gateway applies the default tier.
-  const result = await runSpam(cli.arm, cli.n, realPorts(cli.arm, { endUserBudget: "default" }), { maxUsd: cli.maxUsd }, (l) => console.log(l));
-  const file = join(RESULTS_DIR, `spam-${cli.arm}.json`);
+  // A tagged run uses fresh authors (end users keep their counters for the day) and its own file.
+  const authorSuffix = cli.tag ? `:${cli.tag}` : "";
+  const result = await runSpam(cli.arm, cli.n, realPorts(cli.arm, { endUserBudget: "default" }), { maxUsd: cli.maxUsd, authorSuffix }, (l) => console.log(l));
+  const file = join(RESULTS_DIR, `spam-${cli.arm}${cli.tag ? `-${cli.tag}` : ""}.json`);
   writeFileSync(file, `${JSON.stringify(result, null, 2)}\n`);
   console.log(`wrote ${file}`);
 }

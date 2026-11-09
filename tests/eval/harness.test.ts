@@ -252,3 +252,11 @@ describe("parseCli stress flags", () => {
     expect(() => parseCli(["--arm", "porter", "--set", "attacks", "--tag", "Bad Tag"])).toThrow(/--tag/);
   });
 });
+
+describe("tagged spam runs", () => {
+  it("use fresh authors so a re-run is not measured against yesterday's counters", () => {
+    expect(spamIssues("porter", 2, ":request-cap").every((i) => i.authorExternalId === "eval:porter:spammer:request-cap")).toBe(true);
+    expect(legitIssue("porter", ":request-cap").authorExternalId).toBe("eval:porter:legit:request-cap");
+    expect(legitIssue("porter").authorExternalId).toBe("eval:porter:legit");
+  });
+});
