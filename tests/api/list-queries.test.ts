@@ -10,7 +10,7 @@ const db = drizzle(neon("postgresql://user:pass@db.invalid/porter"), { schema })
 const flat = (s: string) => s.replace(/\s+/g, " ").toLowerCase();
 
 describe("GET /api/runs list query", () => {
-  const q = runsListQuery(db, { limit: 51 }).toSQL();
+  const q = runsListQuery(db, { limit: 51, demoRepo: "Acme/Widgets" }).toSQL();
   const text = flat(q.sql);
 
   it("is one statement with a lateral aggregate over steps and a grouped pending count", () => {
@@ -19,9 +19,20 @@ describe("GET /api/runs list query", () => {
     expect(text).toContain('from "steps" where "steps"."run_id" = "runs"."id"');
     // inside the lateral subquery bare names resolve to "steps", the only relation in its FROM
     expect(text).toContain(`(array_agg("served_model" order by "id") filter (where "role" = 'triage' and "served_model" is not null))[1]`);
-    expect(text).toContain('left join (select "run_id", count(*)::int as "pending_n" from "proposals" where "proposals"."status" = $1 group by "proposals"."run_id")');
+    expect(text).toContain('left join (select "run_id", count(*)::int as "pending_n" from "proposals" where "proposals"."status" = $2 group by "proposals"."run_id")');
     expect(q.params).toContain("pending");
-    expect(text).toContain("order by \"runs\".\"created_at\" desc, \"runs\".\"id\" desc limit $2");
+    expect(text).toContain("order by \"runs\".\"created_at\" desc, \"runs\".\"id\" desc limit $3");
+  });
+
+  it("counts pending proposals only on runs of the demo repository, compared case-insensitively", () => {
+    expect(text).toContain('case when lower("runs"."repo") = lower($1) then coalesce("pending_n", 0) else 0 end');
+    expect(q.params[0]).toBe("Acme/Widgets");
+  });
+
+  it("without a demo repository nothing can be approved, so no run counts any", () => {
+    const none = flat(runsListQuery(db, { limit: 51, demoRepo: null }).toSQL().sql);
+    expect(none).not.toContain('"proposals"');
+    expect(none).toContain('0 as "pendingProposals"'.toLowerCase());
   });
 
   it("selects the list facts but never step bodies or issue text", () => {
@@ -40,12 +51,12 @@ describe("GET /api/runs list query", () => {
   });
 
   it("keeps the filters and the keyset cursor", () => {
-    const f = runsListQuery(db, { source: "web", status: "answered", limit: 3, before: { at: "2026-11-07 12:00:00.123456+00", id: "0b9f1c1e-6a3d-4c0e-9a55-3f0c2f6a1b11" } }).toSQL();
+    const f = runsListQuery(db, { sources: ["github", "web"], status: "answered", limit: 3, before: { at: "2026-11-07 12:00:00.123456+00", id: "0b9f1c1e-6a3d-4c0e-9a55-3f0c2f6a1b11" } }).toSQL();
     const t = flat(f.sql);
-    expect(t).toContain('"runs"."source" = $');
+    expect(t).toContain('"runs"."source" in ($');
     expect(t).toContain('"runs"."status" = $');
     expect(t).toContain('("runs"."created_at", "runs"."id") < ($');
-    expect(f.params).toEqual(expect.arrayContaining(["web", "answered", "2026-11-07 12:00:00.123456+00", 3]));
+    expect(f.params).toEqual(expect.arrayContaining(["github", "web", "answered", "2026-11-07 12:00:00.123456+00", 3]));
   });
 });
 

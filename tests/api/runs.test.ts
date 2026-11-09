@@ -80,48 +80,72 @@ describe("GET /api/runs/:id", () => {
   });
 });
 
+const DEMO = "acme/widgets";
+const list = (url: string, s: RunsReadStore, demoRepo: string | null = DEMO) => handleRunsList(new Request(url), s, { demoRepo });
+
 describe("GET /api/runs", () => {
   const rows = Array.from({ length: 5 }, (_, i) => row(i + 1));
 
   it("passes filters, caps limit at 50 and pages with a cursor", async () => {
     const s = store({}, rows);
-    const res = await handleRunsList(new Request("http://x/api/runs?source=web&status=answered&limit=2"), s);
+    const res = await list("http://x/api/runs?source=web&status=answered&limit=2", s);
     const body = await res.json();
     expect(body.runs).toHaveLength(2);
     expect(typeof body.nextCursor).toBe("string");
-    expect(s.lastList).toMatchObject({ source: "web", status: "answered", limit: 3 });
-    await handleRunsList(new Request("http://x/api/runs?limit=999"), s);
+    expect(s.lastList).toMatchObject({ sources: ["web"], status: "answered", limit: 3 });
+    await list("http://x/api/runs?limit=999", s);
     expect(s.lastList).toMatchObject({ limit: 51 });
-    await handleRunsList(new Request(`http://x/api/runs?cursor=${body.nextCursor}`), s);
+    await list(`http://x/api/runs?cursor=${body.nextCursor}`, s);
     expect((s.lastList as { before: { id: string } }).before.id).toBe(body.runs[1].id);
   });
 
+  it("takes several sources at once: the console's default is GitHub and the try page", async () => {
+    const s = store({}, rows);
+    expect((await list("http://x/api/runs?source=github,web", s)).status).toBe(200);
+    expect(s.lastList).toMatchObject({ sources: ["github", "web"] });
+    await list("http://x/api/runs?source=web,web,github", s);
+    expect(s.lastList).toMatchObject({ sources: ["web", "github"] });
+    await list("http://x/api/runs", s);
+    expect((s.lastList as { sources?: string[] }).sources).toBeUndefined();
+    for (const bad of ["github,nope", "github,", ",web", ""]) {
+      expect((await list(`http://x/api/runs?source=${bad}`, s)).status).toBe(400);
+    }
+  });
+
+  it("counts pending proposals for the demo repository only, the only ones a maintainer can approve", async () => {
+    const s = store({}, rows);
+    await list("http://x/api/runs", s);
+    expect(s.lastList).toMatchObject({ demoRepo: DEMO });
+    await list("http://x/api/runs", s, null);
+    expect(s.lastList).toMatchObject({ demoRepo: null });
+  });
+
   it("no cursor when the page is the last", async () => {
-    const body = await (await handleRunsList(new Request("http://x/api/runs?limit=10"), store({}, rows))).json();
+    const body = await (await list("http://x/api/runs?limit=10", store({}, rows))).json();
     expect(body.nextCursor).toBeNull();
   });
 
   it("400 on bad filters and cursors", async () => {
     const s = store({}, rows);
-    expect((await handleRunsList(new Request("http://x/api/runs?source=nope"), s)).status).toBe(400);
-    expect((await handleRunsList(new Request("http://x/api/runs?limit=0"), s)).status).toBe(400);
-    expect((await handleRunsList(new Request("http://x/api/runs?cursor=zzz"), s)).status).toBe(400);
+    expect((await list("http://x/api/runs?source=nope", s)).status).toBe(400);
+    expect((await list("http://x/api/runs?limit=0", s)).status).toBe(400);
+    expect((await list("http://x/api/runs?cursor=zzz", s)).status).toBe(400);
   });
 
   it("cursor keeps microseconds so rows in the same millisecond are not skipped", async () => {
     const a = { ...row(1), createdAtKey: "2026-11-07 12:00:00.123456+00" };
     const b = { ...row(2), createdAtKey: "2026-11-07 12:00:00.123455+00" };
     const s = store({}, [a, b]);
-    const body = await (await handleRunsList(new Request("http://x/api/runs?limit=1"), s)).json();
+    const body = await (await list("http://x/api/runs?limit=1", s)).json();
     expect(body.runs[0]).not.toHaveProperty("createdAtKey");
-    await handleRunsList(new Request(`http://x/api/runs?cursor=${body.nextCursor}`), s);
+    await list(`http://x/api/runs?cursor=${body.nextCursor}`, s);
     expect(s.lastList).toMatchObject({ before: { at: "2026-11-07 12:00:00.123456+00", id: a.id } });
   });
 
   it("each row carries the triage model, pending proposals and how a hold happened, and nothing from step bodies", async () => {
     const held = { ...row(1), status: "held_guardrail", servedModel: null, heldBy: "gateway" as const };
     const answered = { ...row(2), servedModel: "openai/gpt-oss-20b", pendingProposals: 2 };
-    const body = await (await handleRunsList(new Request("http://x/api/runs"), store({}, [held, answered]))).json();
+    const body = await (await list("http://x/api/runs", store({}, [held, answered]))).json();
     expect(body.runs[0]).toMatchObject({ status: "held_guardrail", servedModel: null, pendingProposals: 0, heldBy: "gateway" });
     expect(body.runs[1]).toMatchObject({ servedModel: "openai/gpt-oss-20b", pendingProposals: 2, heldBy: null });
     for (const r of body.runs) {

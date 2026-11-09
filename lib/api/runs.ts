@@ -1,4 +1,4 @@
-import { and, desc, eq, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { db as defaultDb, type Db } from "../db/client";
 import { guardVerdicts, proposals, runs, steps } from "../db/schema";
 import type { KvStore } from "../kv";
@@ -6,6 +6,7 @@ import { reviewKey } from "../agent/pipeline";
 import { errorJson, safeJson } from "./common";
 
 export const RUN_SOURCES = ["github", "web", "eval", "shadow"] as const;
+export type RunSource = (typeof RUN_SOURCES)[number];
 export const MAX_LIMIT = 50;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -29,7 +30,7 @@ export type RunListRow = {
 export type RunListFacts = {
   /** The model Otari served for the run's triage call, or null when none was served. */
   servedModel: string | null;
-  /** Proposals of this run still waiting for a maintainer. */
+  /** Proposals of this run still waiting for a maintainer, on the demo repository only (none elsewhere can be approved). */
   pendingProposals: number;
   /** For a held run: whether the gateway held it or Porter's output check did. Null otherwise. */
   heldBy: "gateway" | "output" | null;
@@ -37,7 +38,14 @@ export type RunListFacts = {
 
 export type RunListItem = RunListRow & RunListFacts;
 
-export type RunListQuery = { source?: string; status?: string; limit: number; before?: { at: string; id: string } };
+export type RunListQuery = {
+  sources?: RunSource[];
+  status?: string;
+  limit: number;
+  before?: { at: string; id: string };
+  /** Pending proposals count on this repository's runs only; null or absent counts none. */
+  demoRepo?: string | null;
+};
 
 export type RunDetail = {
   run: RunListRow & { body: string | null; reply: string | null; triage: unknown };
@@ -68,12 +76,13 @@ const listCols = {
 
 /**
  * The list in one statement: a lateral aggregate over each run's steps (indexed by run id) gives the
- * triage model and how a hold happened, and a grouped count of pending proposals is joined on.
+ * triage model and how a hold happened, and a grouped count of pending proposals is joined on for
+ * runs of the demo repository, the only ones the decision endpoint lets a maintainer approve.
  * Step bodies (guardrails, tool calls) never leave the database here.
  */
 export function runsListQuery(d: Db, q: RunListQuery) {
   const conds: SQL[] = [];
-  if (q.source) conds.push(eq(runs.source, q.source as (typeof RUN_SOURCES)[number]));
+  if (q.sources?.length) conds.push(inArray(runs.source, q.sources));
   if (q.status) conds.push(eq(runs.status, q.status));
   if (q.before) {
     conds.push(sql`(${runs.createdAt}, ${runs.id}) < (${q.before.at}::timestamptz, ${q.before.id}::uuid)`);
@@ -95,16 +104,21 @@ export function runsListQuery(d: Db, q: RunListQuery) {
     .where(eq(proposals.status, "pending"))
     .groupBy(proposals.runId)
     .as("pending_proposals");
-  return d
-    .select({
-      ...listCols,
-      servedModel: facts.servedModel,
-      pendingProposals: sql<number>`coalesce(${pending.n}, 0)`.mapWith(Number),
-      heldBy: sql<"gateway" | "output" | null>`case when ${runs.status} = 'held_guardrail' then case when ${facts.gatewayHold} then 'gateway' when ${facts.outputHold} then 'output' end end`,
-    })
-    .from(runs)
-    .leftJoinLateral(facts, sql`true`)
-    .leftJoin(pending, eq(pending.runId, runs.id))
+  const demoRepo = q.demoRepo?.trim() || null;
+  const select = {
+    ...listCols,
+    servedModel: facts.servedModel,
+    pendingProposals: (demoRepo
+      ? sql<number>`case when lower(${runs.repo}) = lower(${demoRepo}) then coalesce(${pending.n}, 0) else 0 end`
+      : sql<number>`0`
+    )
+      .mapWith(Number)
+      .as("pendingProposals"),
+    heldBy: sql<"gateway" | "output" | null>`case when ${runs.status} = 'held_guardrail' then case when ${facts.gatewayHold} then 'gateway' when ${facts.outputHold} then 'output' end end`,
+  };
+  const base = d.select(select).from(runs).leftJoinLateral(facts, sql`true`);
+  const joined = demoRepo ? base.leftJoin(pending, eq(pending.runId, runs.id)) : base;
+  return joined
     .where(conds.length ? and(...conds) : undefined)
     .orderBy(desc(runs.createdAt), desc(runs.id))
     .limit(q.limit);
@@ -148,12 +162,24 @@ function publicRow<T extends { createdAtKey: string }>(r: T): Omit<T, "createdAt
   return copy as Omit<T, "createdAtKey">;
 }
 
-/** GET /api/runs?source=&status=&limit=&cursor= */
-export async function handleRunsList(req: Request, store: RunsReadStore): Promise<Response> {
+const isSource = (v: string): v is RunSource => (RUN_SOURCES as readonly string[]).includes(v);
+
+/** "github,web" → ["github", "web"]; null when any part is not a known source. */
+export function parseSources(raw: string): RunSource[] | null {
+  const parts = raw.split(",").map((x) => x.trim());
+  if (!parts.every(isSource)) return null;
+  return [...new Set(parts)];
+}
+
+export type RunsListDeps = { demoRepo: string | null };
+
+/** GET /api/runs?source=github,web&status=&limit=&cursor= */
+export async function handleRunsList(req: Request, store: RunsReadStore, d: RunsListDeps): Promise<Response> {
   const url = new URL(req.url);
-  const source = url.searchParams.get("source") ?? undefined;
+  const rawSource = url.searchParams.get("source");
+  const sources = rawSource === null ? undefined : parseSources(rawSource);
   const status = url.searchParams.get("status") ?? undefined;
-  if (source !== undefined && !(RUN_SOURCES as readonly string[]).includes(source)) return errorJson(400, "invalid_request", "unknown source");
+  if (sources === null) return errorJson(400, "invalid_request", "unknown source");
   if (status !== undefined && !/^[a-z_]{1,40}$/.test(status)) return errorJson(400, "invalid_request", "unknown status");
   const rawLimit = url.searchParams.get("limit");
   const parsedLimit = rawLimit === null ? 20 : Number(rawLimit);
@@ -163,7 +189,7 @@ export async function handleRunsList(req: Request, store: RunsReadStore): Promis
   const before = cursor ? decodeCursor(cursor) : undefined;
   if (cursor && !before) return errorJson(400, "invalid_request", "bad cursor");
 
-  const rows = await store.list({ source, status, limit: limit + 1, before: before ?? undefined });
+  const rows = await store.list({ sources, status, limit: limit + 1, before: before ?? undefined, demoRepo: d.demoRepo });
   const page = rows.slice(0, limit);
   const last = page[page.length - 1];
   return safeJson({

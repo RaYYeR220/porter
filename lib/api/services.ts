@@ -27,6 +27,8 @@ function newcomerBudgetId(): string {
 export const productionApi = {
   kv: () => drizzleKv(),
   runs: () => drizzleRunsStore(),
+  /** The one repository whose proposals a maintainer can approve; null until configured. */
+  demoRepo: () => nonEmpty(process.env.DEMO_REPO),
 
   authors(): AuthorsDeps {
     return {
