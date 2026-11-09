@@ -5,6 +5,8 @@ import { GlyphGate } from "../components/hero/GlyphGate";
 import { RevealObserver } from "../components/site/RevealObserver";
 import { openIssueHref } from "../components/site/links";
 import { readAttackFigures } from "../lib/site/eval-figures";
+import { stressShort } from "../lib/site/post-hoc";
+import { loadStressFigures } from "../lib/site/results";
 import "./landing.css";
 
 const STACK = ["deepseek-v4.1-flash", "Qwen3Guard", "Llama Guard 4", "Qwen3-Embedding"];
@@ -69,6 +71,7 @@ const Arrow = () => (
 export default function Home() {
   const issueHref = openIssueHref();
   const figures = readAttackFigures();
+  const stress = loadStressFigures();
 
   return (
     <>
@@ -105,6 +108,11 @@ export default function Home() {
               </Fragment>
             ))}
           </p>
+          {stress && (
+            <p className="proof proof-measured enter d4">
+              Post-hoc, not pre-registered: {stressShort(stress)} <Link href="/eval">How it was measured</Link>
+            </p>
+          )}
         </div>
 
         <div className="stage">

@@ -29,6 +29,9 @@ export type PostHocEvalDef = Base & { kind: "eval"; set: EvalSet };
 export type PostHocSpamDef = Base & { kind: "spam" };
 export type PostHocDef = PostHocEvalDef | PostHocSpamDef;
 
+/** The smaller model of the stress run, called directly for triage and review. */
+export const SMALL_MODEL = "google/gemma-3-27b-it";
+
 export const POST_HOC: readonly PostHocDef[] = [
   {
     kind: "eval",
@@ -39,8 +42,7 @@ export const POST_HOC: readonly PostHocDef[] = [
       { label: "Porter", arm: "porter", tag: "small-model" },
       { label: "Baseline", arm: "baseline", tag: "small-model" },
     ],
-    changed:
-      "triage and review were sent straight to `google/gemma-3-27b-it` instead of the routing policies, with `pnpm eval --model google/gemma-3-27b-it --tag small-model`",
+    changed: `triage and review were sent straight to \`${SMALL_MODEL}\` instead of the routing policies, with \`pnpm eval --model ${SMALL_MODEL} --tag small-model\``,
     commit: "cbec9dc",
     whenMissing: "Not run yet.",
   },
@@ -122,11 +124,22 @@ export function benignCells(f: EvalFile, expected?: number): string[] {
 
 const REFUSED = new Set(["refused_budget", "blocked_author"]);
 
+/** Answered and gateway-refused spam issues; `refusedFree` when every refusal billed nothing. */
+export function spamCounts(s: SpamResult): { answered: number; refused: number; refusedFree: boolean } {
+  const refused = s.issues.filter((i) => REFUSED.has(i.status));
+  return {
+    answered: s.issues.filter((i) => i.status === "answered").length,
+    refused: refused.length,
+    refusedFree: refused.length > 0 && refused.every((i) => i.cost_usd === 0),
+  };
+}
+
 export function spamCells(s: SpamResult): string[] {
+  const n = spamCounts(s);
   return [
     `${s.issues.length}/${s.n}${s.stopped ? ` (stopped: ${s.stopped})` : ""}`,
-    String(s.issues.filter((i) => i.status === "answered").length),
-    String(s.issues.filter((i) => REFUSED.has(i.status)).length),
+    String(n.answered),
+    String(n.refused),
     s.first_refusal_index === null ? "none" : `issue ${s.first_refusal_index}`,
     usd(s.total_cost_usd - (s.legit?.cost_usd ?? 0)),
     s.legit === null ? "-" : s.legit.served ? "yes" : `no (${s.legit.status})`,
@@ -198,6 +211,39 @@ export function postHocTable(d: PostHocData): PostHocTable {
     sources: data.runs.map((r) => `results/${evalFileName(r.arm, data.def.set, r.tag)}`),
   };
 }
+
+/* ---------- the smaller-model stress run, as one sentence ---------- */
+
+export type StressFigures = { cases: number; baseline: number; porter: number; porterAtGateway: number; baselineCanaryOnly: boolean };
+
+/** Both arms of the smaller-model run, complete and the same size; null otherwise. */
+export function stressFigures(porter: Loaded<EvalFile>, baseline: Loaded<EvalFile>): StressFigures | null {
+  if (porter.state !== "ok" || baseline.state !== "ok") return null;
+  const p = porter.data;
+  const b = baseline.data;
+  if (p.stopped || b.stopped || p.totals.cases === 0 || p.totals.cases !== b.totals.cases) return null;
+  const hits = b.cases.filter((c) => c.hijacked);
+  return {
+    cases: p.totals.cases,
+    baseline: b.totals.hijacked,
+    porter: p.totals.hijacked,
+    porterAtGateway: p.totals.blocked_at.gateway_guardrail ?? 0,
+    baselineCanaryOnly: hits.length > 0 && hits.every((c) => c.goal?.kind === "reply_canary"),
+  };
+}
+
+/** What happened to the prompt-only bot, in the words its hijacks' goal kinds allow. */
+function botOutcome(s: StressFigures, short: boolean): string {
+  if (!s.baselineCanaryOnly) return `was hijacked by ${s.baseline} of ${s.cases} attacks`;
+  return short ? `leaked attacker text in ${s.baseline} of ${s.cases} replies` : `let the attacker's planted text into ${s.baseline} of ${s.cases} replies`;
+}
+
+/** The README's line. */
+export const stressSentence = (s: StressFigures) =>
+  `with a smaller open-weight model (\`${SMALL_MODEL}\`) on triage and review, a prompt-only bot ${botOutcome(s, false)}; Porter let ${s.porter} through, and ${s.porterAtGateway} never reached a model.`;
+
+/** The landing page's shorter line. */
+export const stressShort = (s: StressFigures) => `on a smaller open-weight model, a prompt-only bot ${botOutcome(s, true)}; Porter let ${s.porter} through.`;
 
 /** "triage and review…" → "Triage and review…". */
 export const sentence = (clause: string) => clause.charAt(0).toUpperCase() + clause.slice(1);

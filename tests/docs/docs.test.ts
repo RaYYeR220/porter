@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import { POST_HOC_TITLE } from "../../lib/site/post-hoc";
-import { applyBlock, END, loadResults, renderBlock, START } from "../../scripts/render-results";
+import { applyBlock, applyMarked, END, loadResults, MEASURED_END, MEASURED_START, renderBlock, renderMeasured, START } from "../../scripts/render-results";
 
 const ROOT = join(__dirname, "../..");
 const DOCS = ["README.md", "JUDGES.md", "CHALLENGE_CHECKLIST.md", "CLAIMS.md", "docs/architecture.md", "packages/porter-guard/README.md"];
@@ -68,8 +68,24 @@ describe("docs: the README results block", () => {
     expect(next === -1 || next > end).toBe(true);
   });
 
-  it("is exactly what pnpm eval:render writes from the committed results", () => {
-    expect(applyBlock(readme, renderBlock(loadResults(committedResultsDir())))).toBe(readme);
+  it("is exactly what pnpm eval:render writes from the committed results, the top list included", () => {
+    const r = loadResults(committedResultsDir());
+    expect(applyMarked(applyBlock(readme, renderBlock(r)), renderMeasured(r), MEASURED_START, MEASURED_END)).toBe(readme);
+  });
+
+  it("keeps the What we measured markers once each, above every section", () => {
+    expect(readme.split(MEASURED_START)).toHaveLength(2);
+    expect(readme.split(MEASURED_END)).toHaveLength(2);
+    expect(readme.indexOf(MEASURED_END)).toBeGreaterThan(readme.indexOf(MEASURED_START));
+    expect(readme.indexOf(MEASURED_END)).toBeLessThan(readme.indexOf("\n## "));
+  });
+
+  it("reads the results in words: no number outside code spans in that section", () => {
+    const at = readme.indexOf("\n## What the results say\n");
+    expect(at).toBeGreaterThan(-1);
+    const next = readme.indexOf("\n## ", at + 1);
+    const words = readme.slice(at, next === -1 ? undefined : next).replace(/`[^`]*`/g, "").replace(/\]\([^)]*\)/g, "]");
+    expect(words).not.toMatch(/\d/);
   });
 
   it("renders cleanly with no results at all and changes nothing outside the markers", () => {

@@ -9,8 +9,8 @@ import { summarizeShadow } from "../shadow-summary";
 import type { ShadowFile, ShadowSummary } from "../shadow-summary";
 import { ARMS, countRows } from "./evidence";
 import type { EvalResults, Loaded, PerArm } from "./evidence";
-import { evalFileName, POST_HOC, spamFileName } from "./post-hoc";
-import type { PostHocData } from "./post-hoc";
+import { evalFileName, POST_HOC, spamFileName, stressFigures } from "./post-hoc";
+import type { PostHocData, StressFigures } from "./post-hoc";
 
 /**
  * Server-only loaders for the evidence pages. They read the committed files in results/ when the page is
@@ -198,6 +198,11 @@ export function loadPostHoc(dir = resultsDir()): PostHocData[] {
         ? { def, expected: expected[def.set], runs: def.runs.map((r) => ({ ...r, loaded: loadTaggedEvalFile(r.arm, def.set, r.tag, dir) })) }
         : { def, runs: def.runs.map((r) => ({ ...r, loaded: loadTaggedSpamFile(r.arm, r.tag, dir) })) },
   );
+}
+
+/** The smaller-model stress run's figures (post-hoc), or null until both arms' files are complete. */
+export function loadStressFigures(dir = resultsDir()): StressFigures | null {
+  return stressFigures(loadTaggedEvalFile("porter", "attacks", "small-model", dir), loadTaggedEvalFile("baseline", "attacks", "small-model", dir));
 }
 
 export type ShadowReport = { file: ShadowFile; summary: ShadowSummary };

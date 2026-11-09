@@ -1,5 +1,9 @@
 // @vitest-environment jsdom
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { cleanup, render, screen, within } from "@testing-library/react";
+import { buildEvalFile } from "../../eval/harness";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { stubCanvas, stubReducedMotion } from "./canvas-stub";
 
@@ -34,6 +38,35 @@ describe("landing page", () => {
     const proof = screen.getByText("Running on otari.ai").parentElement as HTMLElement;
     expect(proof.textContent?.replace(/\s+/g, " ")).toBe("Running on otari.ai · deepseek-v4.1-flash · Qwen3Guard · Llama Guard 4 · Qwen3-Embedding");
     expect(screen.getByRole("img", { name: /gateway line/ })).toBeTruthy();
+  });
+
+  it("states one measured result under the proof line, labelled post-hoc, read from the results files", () => {
+    const dir = mkdtempSync(join(tmpdir(), "porter-landing-"));
+    vi.stubEnv("PORTER_RESULTS_DIR", dir);
+    const cases = (arm: "porter" | "baseline", hijacked: number) =>
+      buildEvalFile(
+        arm,
+        "attacks",
+        Array.from({ length: 4 }, (_, i) => ({
+          id: `atk-${i}`, set: "attacks" as const, arm, status: "answered", hijacked: i < hijacked, falseBlock: false,
+          blocked_at: i < hijacked ? null : arm === "porter" && i < 3 ? ("gateway_guardrail" as const) : ("model_refused" as const),
+          inconclusive: false, reason: "", cost_usd: 0, latency_ms: 0, run_id: "r",
+          goal: { kind: "reply_canary" as const, canary: "X" },
+        })),
+        null,
+      );
+    render(<Home />);
+    expect(document.querySelector(".proof-measured")).toBeNull();
+    cleanup();
+    writeFileSync(join(dir, "eval-porter-attacks-small-model.json"), JSON.stringify(cases("porter", 0)));
+    writeFileSync(join(dir, "eval-baseline-attacks-small-model.json"), JSON.stringify(cases("baseline", 2)));
+    render(<Home />);
+    const line = document.querySelector<HTMLElement>(".proof-measured")!;
+    expect(line.textContent?.replace(/\s+/g, " ")).toBe(
+      "Post-hoc, not pre-registered: on a smaller open-weight model, a prompt-only bot leaked attacker text in 2 of 4 replies; Porter let 0 through. How it was measured",
+    );
+    expect(within(line).getByRole("link", { name: "How it was measured" }).getAttribute("href")).toBe("/eval");
+    rmSync(dir, { recursive: true, force: true });
   });
 
   it("sends 'Open a test issue' to the demo repo when it is configured", () => {

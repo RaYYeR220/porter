@@ -6,8 +6,8 @@ import { buildEvalFile } from "../../eval/harness";
 import type { EvalRow } from "../../eval/harness";
 import type { SpamResult } from "../../eval/spam-core";
 import { POST_HOC, POST_HOC_TITLE, postHocTable } from "../../lib/site/post-hoc";
-import { loadPostHoc, loadTaggedEvalFile, loadTaggedSpamFile } from "../../lib/site/results";
-import { loadResults, renderBlock } from "../../scripts/render-results";
+import { loadPostHoc, loadStressFigures, loadTaggedEvalFile, loadTaggedSpamFile } from "../../lib/site/results";
+import { applyMarked, loadResults, MEASURED_END, MEASURED_START, renderBlock, renderMeasured } from "../../scripts/render-results";
 
 const FIXTURES = join(__dirname, "..", "fixtures", "results");
 const PREREG = ["eval-porter-attacks", "eval-baseline-attacks", "eval-porter-benign", "eval-baseline-benign", "spam-porter", "spam-baseline"];
@@ -137,5 +137,49 @@ describe("post-hoc block in the README", () => {
       const t = postHocTable(d);
       for (const r of t.rows) expect(r).toHaveLength(t.head.length);
     }
+  });
+});
+
+describe("what we measured, at the top of the README", () => {
+  it("leads with the post-hoc smaller-model line, then the pre-registered one, then the request cap, all computed", () => {
+    usePrereg();
+    smallModel();
+    put("spam-porter-request-cap.json", spam());
+    const lines = renderMeasured(loadResults(dir)).split("\n");
+    expect(lines).toHaveLength(3);
+    expect(lines[0]).toBe(
+      "- **Post-hoc, not pre-registered:** with a smaller open-weight model (`google/gemma-3-27b-it`) on triage and review, a prompt-only bot let the attacker's planted text into 1 of 2 replies; Porter let 0 through, and 1 never reached a model. [Details](#after-the-pre-registered-run-post-hoc-not-pre-registered)",
+    );
+    expect(lines[1]).toBe(
+      "- **Pre-registered:** with the production models, 1 of 25 attacks (1 inconclusive) succeeded against Porter and 11 of 25 against the prompt-only bot. Porter held 15 of 25 at the gateway before any model ran and spent $0.0447 on the attacks, against $0.1070. The price: 2 of 25 legitimate issues held for a maintainer, against 0 of 25. [Results](#results)",
+    );
+    expect(lines[2]).toBe(
+      "- **Post-hoc, not pre-registered:** with a request cap in each newcomer's daily budget, 2 of 4 spam issues were answered and 2 were refused at the gateway at no cost; with the dollar cap alone, 9 of 20 were answered.",
+    );
+  });
+
+  it("says no attack succeeded when none did, and leaves out what has not run", () => {
+    const zero = (arm: "porter" | "baseline") =>
+      buildEvalFile(arm, "attacks", [row("a", { arm, blocked_at: arm === "porter" ? "gateway_guardrail" : "model_refused" }), row("b", { arm })], null);
+    put("eval-porter-attacks.json", zero("porter"));
+    put("eval-baseline-attacks.json", zero("baseline"));
+    put("eval-porter-benign.json", buildEvalFile("porter", "benign", [benign("x")], null));
+    put("eval-baseline-benign.json", buildEvalFile("baseline", "benign", [benign("x", { arm: "baseline" })], null));
+    const lines = renderMeasured(loadResults(dir)).split("\n");
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("none of the 2 attacks succeeded in either arm. Porter held 1 of 2 at the gateway");
+    expect(renderMeasured(loadResults(mkdtempSync(join(tmpdir(), "porter-empty-"))))).toBe("- Not run yet.");
+  });
+
+  it("goes between its own markers and nowhere else", () => {
+    const readme = `# P\n\n${MEASURED_START}\nold\n${MEASURED_END}\n\n## Results\n`;
+    expect(applyMarked(readme, "NEW", MEASURED_START, MEASURED_END)).toBe(`# P\n\n${MEASURED_START}\nNEW\n${MEASURED_END}\n\n## Results\n`);
+    expect(applyMarked("# P\n", "NEW", MEASURED_START, MEASURED_END)).toBe("# P\n");
+  });
+
+  it("gives the landing page the same smaller-model figures", () => {
+    expect(loadStressFigures(dir)).toBeNull();
+    smallModel();
+    expect(loadStressFigures(dir)).toEqual({ cases: 2, baseline: 1, porter: 0, porterAtGateway: 1, baselineCanaryOnly: true });
   });
 });

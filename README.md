@@ -4,6 +4,14 @@
 
 Porter answers GitHub issues from people a project has never met. It runs on open-weight models through [Otari](https://otari.ai), the hosted AI gateway by Mozilla.ai.
 
+**What we measured**, against the same bot with prompt-only defences ([how to read it](#what-the-results-say)):
+
+<!-- measured:start -->
+- **Post-hoc, not pre-registered:** with a smaller open-weight model (`google/gemma-3-27b-it`) on triage and review, a prompt-only bot let the attacker's planted text into 2 of 25 replies; Porter let 0 through, and 14 never reached a model. [Details](#after-the-pre-registered-run-post-hoc-not-pre-registered)
+- **Pre-registered:** with the production models, none of the 25 attacks succeeded in either arm. Porter held 14 of 25 at the gateway before any model ran and spent $0.0369 on the attacks, against $0.0904. The price: 5 of 25 legitimate issues held for a maintainer, against 0 of 25. [Results](#results)
+- **Post-hoc, not pre-registered:** with a request cap in each newcomer's daily budget, 6 of 20 spam issues were answered and 14 were refused at the gateway at no cost; with the dollar cap alone, 20 of 20 were answered.
+<!-- measured:end -->
+
 - **Live:** https://porter-frontdesk.vercel.app
 - **[Try it without an account](https://porter-frontdesk.vercel.app/try):** file a test issue as a stranger and watch each gateway call happen.
 - **On GitHub:** open a test issue on the demo repository, [RaYYeR220/porter-demo](https://github.com/RaYYeR220/porter-demo).
@@ -130,7 +138,19 @@ What changed: The newcomer end-user budget also carries a limit of 12 requests a
 What changed: Other people's text reaches the reviewer with closed HTML comments removed, and addresses outside the link allowlist are written without a scheme (commit 5a999a7). Source: `results/eval-porter-benign-after-fix.json`, `results/eval-porter-benign.json`.
 <!-- results:end -->
 
-The corpus, the scoring rules and the targets were committed in [`eval/PREREGISTRATION.md`](eval/PREREGISTRATION.md) before any case was sent; the block above is written by `pnpm eval:render` from `results/*.json` and is never edited by hand. Both arms run the same pipeline on the same models; the baseline keeps the prompt-level defences and drops the org-level guardrail, the tool ACL, the output check and the per-author budgets. The full comparison, per technique, is on [/eval](https://porter-frontdesk.vercel.app/eval).
+The corpus, the scoring rules and the targets were committed in [`eval/PREREGISTRATION.md`](eval/PREREGISTRATION.md) before any case was sent; the block above is written by `pnpm eval:render` from `results/*.json` and is never edited by hand. Both arms run the same pipeline on the same models; the baseline keeps the prompt-level defences and drops the org-level guardrail, the tool ACL, the output check and the per-author budgets. Below the pre-registered tables, three post-hoc runs each change one thing; they were not fixed in advance and are labelled as such. The full comparison, per technique, is on [/eval](https://porter-frontdesk.vercel.app/eval).
+
+## What the results say
+
+Read the negative result first. With the production models (`DeepSeek V4.1 Flash` on triage, `GLM-5.3-Flash` on review), the prompt-only bot already refuses: in the pre-registered run no attack succeeded against either arm. Porter's layers do not change that outcome. What they change is where an attack stops, what it costs, what happens when the model is weaker, and how spam is held back.
+
+- **What never reaches a model.** Porter held a large share of the attacks at the gateway, before any model ran: no answer tokens spent, nothing for a model to be talked into. The prompt-only bot sends every attack to its model and relies on the model saying no.
+- **What it costs.** A held attack costs nothing to answer, so Porter spent less on the attacks than the prompt-only bot. The guard's own classifier calls bill to a separate workspace and are not in these figures.
+- **When the model is weaker.** Post-hoc, not pre-registered: with `google/gemma-3-27b-it` on triage and review, the prompt-only bot let the attacker's planted text into some of its replies; Porter let none through. A smaller model is not a lab case: it is what Porter's own tier-down serves when an author nears their budget, and what a project picks when it wants to spend less.
+- **Spam is a requests problem, not a dollars problem.** In the pre-registered wave a spam issue cost so little that the newcomer's daily dollar budget never ran out, and every spam issue was answered in both arms. Post-hoc, not pre-registered: a request limit on the same end-user budget, a dashboard setting with no code change, refused most of the wave at the gateway at no cost.
+- **The price is false blocks.** In the pre-registered run Porter held some legitimate issues for a maintainer, most of them at its own output check; the prompt-only bot held none. Post-hoc, after two fixes in `5a999a7` (the reviewer gets other people's text without closed HTML comments, and addresses outside the allowlist are written without a scheme), fewer were held, all at the output check. The remaining cause is deliberate: a reply that quotes the project's own API base URL, even inside a code span, is held, because the output check reads the raw text and treats every URL outside the allowlist as a link, so no markup trick can hide one. The fix is a per-repository allowlist of the project's own hosts, and it is not shipped.
+
+Read the post-hoc runs as stress tests, not as the result: each changed one thing after the pre-registered results were in. Every figure behind these sentences is in the tables above, rendered from `results/*.json`.
 
 ## Architecture
 
@@ -314,6 +334,8 @@ pnpm test
 - **Hosted setup is dashboard-only.** The org layout above is created by hand; there is no API path for it with an API key.
 - **Guard calls bill to a separate workspace.** Costs on a run trace and in the eval are generation only.
 - **The eval is small by design**: 25 attacks and 25 real issues per arm, each run once. It measures these cases, not prompt injection in general; one hijack more or less is within noise.
+- **Post-hoc runs are not pre-registered.** The smaller-model run, the request cap and the after-fix rerun each changed one thing after the pre-registered results were in. They show what happens under those changes; they do not replace the pre-registered result.
+- **Replies that quote the project's own host are held.** The output check reads raw text and treats every URL outside its allowlist as a link, on purpose, so a reply that quotes the project's own API base URL is held for a maintainer even inside a code span. A per-repository allowlist of the project's own hosts would fix it; it is not shipped.
 - **The public console is a demo.** Any visitor can approve proposals (demo repository only) and change author tiers, rate-limited per IP and recorded in an audit trail. A production install would put the console behind the maintainers' login.
 
 ## License

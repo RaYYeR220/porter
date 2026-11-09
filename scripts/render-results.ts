@@ -10,12 +10,27 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { EvalFile } from "../eval/harness";
 import type { SpamResult } from "../eval/spam-core";
-import { attackCells, benignCells, POST_HOC_NOTE, POST_HOC_TITLE, postHocTable, sentence, usd } from "../lib/site/post-hoc";
+import type { Loaded } from "../lib/site/evidence";
+import {
+  attackCells,
+  benignCells,
+  POST_HOC_NOTE,
+  POST_HOC_TITLE,
+  postHocTable,
+  sentence,
+  spamCounts,
+  stressFigures,
+  stressSentence,
+  usd,
+} from "../lib/site/post-hoc";
 import type { PostHocData } from "../lib/site/post-hoc";
 import { loadPostHoc } from "../lib/site/results";
 
 export const START = "<!-- results:start -->";
 export const END = "<!-- results:end -->";
+/** The short "What we measured" list near the top of the README. */
+export const MEASURED_START = "<!-- measured:start -->";
+export const MEASURED_END = "<!-- measured:end -->";
 const NOT_RUN = "Not run yet.";
 const ARMS = ["porter", "baseline"] as const;
 const label = (arm: string) => (arm === "porter" ? "Porter" : "Baseline");
@@ -127,6 +142,64 @@ export function renderBlock(r: Results): string {
   ].join("\n");
 }
 
+const ofN = (x: number, n: number) => `${x} of ${n}`;
+const POST_HOC_LEAD = "- **Post-hoc, not pre-registered:**";
+
+/**
+ * Up to three lines for the top of the README, strongest honest result first: the smaller-model stress run
+ * (post-hoc), the pre-registered attacks and false blocks, the request-capped spam wave (post-hoc). Each line
+ * appears only when its files are complete; every number comes from them.
+ */
+export function renderMeasured(r: Results): string {
+  const lines: string[] = [];
+  const posthoc = (key: string) => r.postHoc?.find((d) => d.def.key === key);
+
+  const small = posthoc("small-model");
+  if (small?.def.kind === "eval") {
+    const [porter, baseline] = small.runs as Array<{ loaded: Loaded<EvalFile> }>;
+    const s = porter && baseline ? stressFigures(porter.loaded, baseline.loaded) : null;
+    if (s) lines.push(`${POST_HOC_LEAD} ${stressSentence(s)} [Details](#after-the-pre-registered-run-post-hoc-not-pre-registered)`);
+  }
+
+  const { porter: pa, baseline: ba } = r.attacks;
+  const { porter: pb, baseline: bb } = r.benign;
+  if (pa && ba && pb && bb) {
+    const inc = (f: EvalFile) => (f.totals.inconclusive > 0 ? ` (${f.totals.inconclusive} inconclusive)` : "");
+    const outcome =
+      pa.totals.hijacked === 0 && ba.totals.hijacked === 0 && pa.totals.cases === ba.totals.cases
+        ? `none of the ${pa.totals.cases} attacks succeeded in either arm`
+        : `${ofN(pa.totals.hijacked, pa.totals.cases)} attacks${inc(pa)} succeeded against Porter and ${ofN(ba.totals.hijacked, ba.totals.cases)}${inc(ba)} against the prompt-only bot`;
+    lines.push(
+      `- **Pre-registered:** with the production models, ${outcome}. ` +
+        `Porter held ${ofN(pa.totals.blocked_at.gateway_guardrail ?? 0, pa.totals.cases)} at the gateway before any model ran and spent ${usd(pa.totals.cost_usd)} on the attacks, against ${usd(ba.totals.cost_usd)}. ` +
+        `The price: ${ofN(pb.totals.falseBlocks, pb.totals.cases)} legitimate issues held for a maintainer, against ${ofN(bb.totals.falseBlocks, bb.totals.cases)}. [Results](#results)`,
+    );
+  }
+
+  const cap = posthoc("request-cap");
+  if (cap?.def.kind === "spam") {
+    const [capped, pre] = cap.runs as Array<{ loaded: Loaded<SpamResult> }>;
+    if (capped?.loaded.state === "ok" && pre?.loaded.state === "ok") {
+      const s = capped.loaded.data;
+      const n = spamCounts(s);
+      lines.push(
+        `${POST_HOC_LEAD} with a request cap in each newcomer's daily budget, ${ofN(n.answered, s.n)} spam issues were answered and ${n.refused} were refused at the gateway${n.refusedFree ? " at no cost" : ""}; ` +
+          `with the dollar cap alone, ${ofN(spamCounts(pre.loaded.data).answered, pre.loaded.data.n)} were answered.`,
+      );
+    }
+  }
+  return lines.length > 0 ? lines.join("\n") : "- Not run yet.";
+}
+
+/** Replaces the text between two markers; a README without them is left as it is. */
+export function applyMarked(readme: string, block: string, start: string, end: string): string {
+  const eol = readme.includes("\r\n") ? "\r\n" : "\n";
+  const s = readme.indexOf(start);
+  const e = readme.indexOf(end);
+  if (s === -1 || e < s) return readme;
+  return `${readme.slice(0, s + start.length)}${eol}${block.replace(/\n/g, eol)}${eol}${readme.slice(e)}`;
+}
+
 /** Replaces the text between the markers; adds a minimal "## Results" section when they are missing. */
 export function applyBlock(readme: string, block: string): string {
   const eol = readme.includes("\r\n") ? "\r\n" : "\n";
@@ -147,7 +220,8 @@ export function applyBlock(readme: string, block: string): string {
 function main() {
   const root = join(__dirname, "..");
   const readmePath = join(root, "README.md");
-  const next = applyBlock(readFileSync(readmePath, "utf8"), renderBlock(loadResults(join(root, "results"))));
+  const r = loadResults(join(root, "results"));
+  const next = applyMarked(applyBlock(readFileSync(readmePath, "utf8"), renderBlock(r)), renderMeasured(r), MEASURED_START, MEASURED_END);
   writeFileSync(readmePath, next);
   console.log("README.md results block updated");
 }

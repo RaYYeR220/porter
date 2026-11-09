@@ -68,6 +68,17 @@
   align-items: center;
   gap: 8px;
 }
+.proof.proof-measured {
+  display: block;
+  margin-top: 8px;
+  text-align: center;
+  text-wrap: balance;
+}
+.proof-measured a {
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 
 /* the stage takes what is left of the first screen: a little air, the band, the hint */
 .stage {
