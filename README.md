@@ -147,7 +147,7 @@ flowchart LR
   guard --> db
 ```
 
-Every arrow is wired and registered; no issue has been answered end to end yet, because the org balance is unfunded. Only the guardrail hold path has carried live traffic (see [JUDGES.md](JUDGES.md#what-is-live)). Trust boundaries, data stores and a request walkthrough: [docs/architecture.md](docs/architecture.md).
+Every arrow is wired and registered, and live runs have used all of them except approval: intake from /try and GitHub, the guardrail, the tool loop with MCP and web fetch, the sandbox, the review and the reply posted on GitHub ([JUDGES.md](JUDGES.md#what-is-live) links the runs). `/mcp/execute` on the maintainer key, and the label or close it makes, waits for the first maintainer decision. Trust boundaries, data stores and a request walkthrough: [docs/architecture.md](docs/architecture.md).
 
 ## Run it yourself
 
