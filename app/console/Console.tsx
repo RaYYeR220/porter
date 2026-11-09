@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { fetchProposals, fetchRun, fetchRuns, noticeFor, type ApiFail } from "../../components/app/api";
 import { AuthorsPanel } from "../../components/app/AuthorsPanel";
 import { ago, authorName, DASH, stamp, usd } from "../../components/app/format";
@@ -16,6 +16,9 @@ import { usePoll } from "../../components/app/usePoll";
 const PAGE = 50;
 const SHOWN = 20;
 const REFRESH_MS = 15_000;
+/** The desk's own work: issues on the demo repository and the try page. Shadow and eval runs are opt-in. */
+const DESK_SOURCES = ["github", "web"] as const;
+const sourcesFor = (everything: boolean) => (everything ? undefined : DESK_SOURCES);
 
 const FILTER_LABEL: Record<Filter, string> = { all: "All", answered: "Answered", held: "Held", refused: "Refused", failed: "Failed" };
 
@@ -82,9 +85,10 @@ function QueueRow({ row, now }: { row: RunRow; now: number }) {
 }
 
 /**
- * The maintainer's desk. A cold load is three reads: the runs list, the demo repository's pending
- * proposals and the authors. A run's details are read only when someone opens it, or once after a
- * decision here, to show what the maintainer key's tool call returned.
+ * The maintainer's desk. A cold load is three reads: the runs list (GitHub and try-page runs unless
+ * shadow and eval runs are asked for), the demo repository's pending proposals and the authors. A
+ * run's details are read only when someone opens it, or once after a decision here, to show what the
+ * maintainer key's tool call returned.
  */
 export function Console() {
   const now = useNow();
@@ -97,9 +101,14 @@ export function Console() {
   const [pending, setPending] = useState<Proposal[] | null>(null);
   const [propErr, setPropErr] = useState<ApiFail | null>(null);
   const [decided, setDecided] = useState<Proposal[]>([]);
+  const [everything, setEverything] = useState(false);
+  // What the queue shows right now, for answers that land after the scope was switched.
+  const scope = useRef(false);
 
   const loadFirst = useCallback(async () => {
-    const r = await fetchRuns({ limit: PAGE });
+    const want = scope.current;
+    const r = await fetchRuns({ limit: PAGE, sources: sourcesFor(want) });
+    if (scope.current !== want) return;
     if (!r.ok) {
       setLoadErr(r);
       return;
@@ -131,9 +140,11 @@ export function Console() {
 
   const loadOlder = async () => {
     if (!cursor) return;
+    const want = scope.current;
     setOlder(true);
-    const r = await fetchRuns({ limit: PAGE, cursor });
+    const r = await fetchRuns({ limit: PAGE, cursor, sources: sourcesFor(want) });
     setOlder(false);
+    if (scope.current !== want) return;
     if (!r.ok) {
       setLoadErr(r);
       return;
@@ -144,6 +155,16 @@ export function Console() {
     });
     setCursor(r.data.nextCursor);
     setShown((n) => n + PAGE);
+  };
+
+  const switchScope = (next: boolean) => {
+    scope.current = next;
+    setEverything(next);
+    setRows(null);
+    setCursor(null);
+    setShown(SHOWN);
+    setLoadErr(null);
+    void loadFirst();
   };
 
   const all = useMemo(() => rows ?? [], [rows]);
@@ -195,6 +216,13 @@ export function Console() {
               ))}
             </div>
           </div>
+          <p className="panel-note queue-scope">
+            <span>{everything ? "Every run, shadow runs and eval cases included." : "Issues on the demo repository and from the try page."}</span>
+            <label className="scope-toggle">
+              <input type="checkbox" checked={everything} onChange={(e) => switchScope(e.target.checked)} />
+              Include shadow and eval runs
+            </label>
+          </p>
 
           {rows === null && !loadErr ? (
             <div className="sk-rows" aria-busy="true">

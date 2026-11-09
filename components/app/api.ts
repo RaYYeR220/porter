@@ -35,8 +35,10 @@ const post = (body: unknown): RequestInit => ({
 });
 
 export const fetchRun = (id: string) => request<RunDetail>(`/api/runs/${encodeURIComponent(id)}`);
-export const fetchRuns = (q: { limit?: number; cursor?: string | null } = {}) => {
+/** `sources` narrows the list to those run sources; omitted, every run comes back. */
+export const fetchRuns = (q: { limit?: number; cursor?: string | null; sources?: readonly string[] } = {}) => {
   const p = new URLSearchParams({ limit: String(q.limit ?? 50) });
+  if (q.sources?.length) p.set("source", q.sources.join(","));
   if (q.cursor) p.set("cursor", q.cursor);
   return request<RunsPage>(`/api/runs?${p}`);
 };

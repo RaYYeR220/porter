@@ -108,6 +108,60 @@ describe("console cold load", () => {
   });
 });
 
+describe("console queue scope", () => {
+  beforeEach(() => {
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  const SHADOW = run(20, { source: "shadow", repo: "mozilla-ai/otari", title: "Shadow issue", issueNumber: 120 });
+  const EVAL = run(21, { source: "eval", repo: "porter-shadow/widgets", title: "Eval case", issueNumber: null });
+
+  function stubScoped() {
+    const runUrls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        let body: unknown;
+        if (url.startsWith("/api/runs?")) {
+          runUrls.push(url);
+          const source = new URLSearchParams(url.split("?")[1]).get("source");
+          body = { runs: source === null ? [SHADOW, EVAL, ...RUNS] : RUNS, nextCursor: null };
+        } else if (url.startsWith("/api/proposals?")) body = { proposals: [] };
+        else if (url === "/api/authors") body = { authors: [] };
+        return new Response(JSON.stringify(body ?? { error: "not_found" }), { status: body ? 200 : 404 });
+      }),
+    );
+    return runUrls;
+  }
+
+  it("lists the demo repository and the try page by default, and shadow and eval runs on request", async () => {
+    const runUrls = stubScoped();
+    render(<Console />);
+    await screen.findByRole("link", { name: "Issue 6" });
+    expect(runUrls[0]).toBe("/api/runs?limit=50&source=github%2Cweb");
+    expect(screen.queryByRole("link", { name: "Shadow issue" })).toBeNull();
+    expect(screen.getByText("Last 6 runs")).toBeTruthy();
+
+    const toggle = screen.getByRole("checkbox", { name: "Include shadow and eval runs" }) as HTMLInputElement;
+    expect(toggle.checked).toBe(false);
+    fireEvent.click(toggle);
+    await screen.findByRole("link", { name: "Shadow issue" });
+    expect(screen.getByRole("link", { name: "Eval case" })).toBeTruthy();
+    expect(runUrls[runUrls.length - 1]).toBe("/api/runs?limit=50");
+    expect(toggle.checked).toBe(true);
+    expect(screen.getByText("Last 8 runs")).toBeTruthy();
+
+    fireEvent.click(toggle);
+    await screen.findByText("Last 6 runs");
+    expect(screen.queryByRole("link", { name: "Shadow issue" })).toBeNull();
+    expect(runUrls[runUrls.length - 1]).toBe("/api/runs?limit=50&source=github%2Cweb");
+  });
+});
+
 describe("usePoll", () => {
   let state: DocumentVisibilityState = "visible";
   beforeEach(() => {
