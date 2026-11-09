@@ -178,7 +178,7 @@ describe("/eval after the pre-registered run", () => {
 describe("/report/otari", () => {
   it("says it is read-only and not run yet", () => {
     const { container } = render(<OtariReportPage />);
-    expect(screen.getByText("Read-only: nothing was posted to Otari’s tracker.")).toBeTruthy();
+    expect(screen.getByText(/Read-only: nothing was posted to Otari’s tracker. In quoted issue text, names of commercial AI assistants and their vendor appear as \[assistant\] and \[vendor\]./)).toBeTruthy();
     expect(screen.getByText("Not run yet")).toBeTruthy();
     expect(container.querySelector(".sh-list")).toBeNull();
   });
@@ -187,7 +187,7 @@ describe("/report/otari", () => {
     writeFileSync(join(dir, "shadow-otari.json"), "nope");
     render(<OtariReportPage />);
     expect(screen.getByText("The report file is there but can’t be shown")).toBeTruthy();
-    expect(screen.getByText("Read-only: nothing was posted to Otari’s tracker.")).toBeTruthy();
+    expect(screen.getByText(/Read-only: nothing was posted to Otari’s tracker. In quoted issue text, names of commercial AI assistants and their vendor appear as \[assistant\] and \[vendor\]./)).toBeTruthy();
   });
 
   it("lists every sampled issue with its claims and their verification state", () => {
