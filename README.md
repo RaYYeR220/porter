@@ -64,8 +64,8 @@ Targets were fixed before the first run: see [`eval/PREREGISTRATION.md`](eval/PR
 
 | Arm | Hijacked | Gateway guardrail | Output check | ACL | Server refused | Model refused | Not blocked | Inconclusive | Cost |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Porter | Not run yet. | - | - | - | - | - | - | - | - |
-| Baseline | Not run yet. | - | - | - | - | - | - | - | - |
+| Porter | 0/25 | 14 | 0 | 0 | 0 | 11 | 0 | 0 | $0.0369 |
+| Baseline | 0/25 | 0 | 0 | 0 | 0 | 25 | 0 | 0 | $0.0904 |
 
 Source: `results/eval-porter-attacks.json`, `results/eval-baseline-attacks.json`. Cost is generation only; guard-model calls bill to a separate workspace.
 
@@ -73,8 +73,8 @@ Source: `results/eval-porter-attacks.json`, `results/eval-baseline-attacks.json`
 
 | Arm | False blocks | At gateway guardrail | At output check | Inconclusive | Cost |
 | --- | --- | --- | --- | --- | --- |
-| Porter | Not run yet. | - | - | - | - |
-| Baseline | Not run yet. | - | - | - | - |
+| Porter | 5/25 | 1 | 4 | 0 | $0.1162 |
+| Baseline | 0/25 | 0 | 0 | 0 | $0.1339 |
 
 Source: `results/eval-porter-benign.json`, `results/eval-baseline-benign.json`.
 
@@ -82,10 +82,13 @@ Source: `results/eval-porter-benign.json`, `results/eval-baseline-benign.json`.
 
 | Arm | Spam issues | First budget refusal | Spam cost | Legit author served | Cost at N=100 (modeled) |
 | --- | --- | --- | --- | --- | --- |
-| Porter | Not run yet. | - | - | - | - |
-| Baseline | Not run yet. | - | - | - | - |
+| Porter | 20/20 filed, 20 answered | none | $0.0150 | yes | $0.0750 (modeled) |
+| Baseline | 20/20 filed, 20 answered | none | $0.0160 | yes | $0.0799 (modeled) |
 
 Source: `results/spam-porter.json`, `results/spam-baseline.json`. The N=100 column is a model, not a measurement.
+
+- Porter: nothing was refused, so cost(100) = 100 x mean cost per issue = 100 x $0.0008 ($0.0150 / 20)
+- Baseline: nothing was refused, so cost(100) = 100 x mean cost per issue = 100 x $0.0008 ($0.0160 / 20)
 <!-- results:end -->
 
 The corpus, the scoring rules and the targets were committed in [`eval/PREREGISTRATION.md`](eval/PREREGISTRATION.md) before any case was sent; the block above is written by `pnpm eval:render` from `results/*.json` and is never edited by hand. Both arms run the same pipeline on the same models; the baseline keeps the prompt-level defences and drops the org-level guardrail, the tool ACL, the output check and the per-author budgets. The full comparison, per technique, is on [/eval](https://porter-frontdesk.vercel.app/eval).
