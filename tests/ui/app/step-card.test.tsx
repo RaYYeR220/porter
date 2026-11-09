@@ -20,6 +20,16 @@ describe("StepCard", () => {
     expect(container.textContent).toContain("exit 0");
   });
 
+  it("shows sandbox stdout and stderr without terminal colour codes, as a terminal would", () => {
+    const red = (s: string) => `\u001b[31m${s}\u001b[0m`;
+    const s = repro([{ type: "code_execution", code: "print('\\u001b[31m')", stdout: red("ERROR: no match"), stderr: red("Traceback"), exit_code: 1 }]);
+    render(<StepCard step={s} index={2} />);
+    expect(screen.getByLabelText("stdout").textContent).toBe("ERROR: no match");
+    expect(screen.getByLabelText("stderr").textContent).toBe("Traceback");
+    // the code is what the model wrote: shown as written
+    expect(screen.getByLabelText("Code").textContent).toBe("print('\\u001b[31m')");
+  });
+
   it("shows no sandbox chip without a real code_execution entry", () => {
     const cases: unknown[] = [
       null,

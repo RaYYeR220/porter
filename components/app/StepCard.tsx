@@ -1,3 +1,4 @@
+import { stripAnsi } from "./ansi";
 import { CodeBlock } from "./CodeBlock";
 import { CopyId } from "./CopyId";
 import { duration, usd } from "./format";
@@ -65,8 +66,8 @@ function ToolCallView({ call }: { call: ToolCall }) {
             {call.truncated && <span className="tc-kind">output cut by the sandbox</span>}
           </p>
           <CodeBlock label="Code" code={call.code} />
-          <CodeBlock label="stdout" code={call.stdout} />
-          {call.stderr !== "" && <CodeBlock label="stderr" code={call.stderr} tone="err" />}
+          <CodeBlock label="stdout" code={stripAnsi(call.stdout)} />
+          {call.stderr !== "" && <CodeBlock label="stderr" code={stripAnsi(call.stderr)} tone="err" />}
         </li>
       );
     case "struck":
