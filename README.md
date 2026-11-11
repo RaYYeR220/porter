@@ -17,6 +17,7 @@ For a maintainer, Porter answers each stranger's issue with the evidence it cite
 <!-- measured:end -->
 
 - **Live:** https://porter-frontdesk.vercel.app
+- **Demo video (4:18):** https://youtu.be/TvcHXjVSA5Q · **Feedback video (3:34):** https://youtu.be/2TkA2zo2TNo
 - **[Try it without an account](https://porter-frontdesk.vercel.app/try):** file a test issue as a stranger and watch each gateway call happen.
 - **On GitHub:** open a test issue on the demo repository, [RaYYeR220/porter-demo](https://github.com/RaYYeR220/porter-demo).
 - **Reviewing Porter:** [JUDGES.md](JUDGES.md) is a five-minute path, [CHALLENGE_CHECKLIST.md](CHALLENGE_CHECKLIST.md) maps each requirement to code and pages, and [CLAIMS.md](CLAIMS.md) says how to check every public statement.
